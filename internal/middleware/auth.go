@@ -17,13 +17,17 @@ func AuthMiddleware(validator TokenValidator) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			authHeader := r.Header.Get("Authorization")
 			if !strings.HasPrefix(authHeader, "Bearer ") {
-				http.Error(w, `{"error":"missing authorization header"}`, http.StatusUnauthorized)
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusUnauthorized)
+				w.Write([]byte(`{"error":"missing authorization header"}`))
 				return
 			}
 			token := strings.TrimPrefix(authHeader, "Bearer ")
 			userID, err := validator.ValidateToken(token)
 			if err != nil {
-				http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusUnauthorized)
+				w.Write([]byte(`{"error":"invalid token"}`))
 				return
 			}
 			ctx := context.WithValue(r.Context(), auth.CtxUserID, userID)
