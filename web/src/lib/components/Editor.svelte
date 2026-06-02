@@ -1,6 +1,7 @@
 <script lang="ts">
   import { blockStore } from '$lib/stores/blocks.svelte';
   import BlockRenderer from './BlockRenderer.svelte';
+  import FormatToolbar from './FormatToolbar.svelte';
   import SlashMenu from './SlashMenu.svelte';
   import UndoToast from './UndoToast.svelte';
   import { page } from '$app/stores';
@@ -77,6 +78,8 @@
     >
       {blockStore.pageTitle}
     </h1>
+
+    <FormatToolbar />
 
     <!-- Blocks -->
     <div class="space-y-0.5" role="list">
