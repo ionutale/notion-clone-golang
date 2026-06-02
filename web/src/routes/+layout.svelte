@@ -1,7 +1,24 @@
 <script lang="ts">
   import '../app.css';
+  import { authStore } from '$lib/stores/auth.svelte';
+  import { workspaceStore } from '$lib/stores/workspaces.svelte';
+  import { onMount } from 'svelte';
+  import { page } from '$app/stores';
+  import { goto } from '$app/navigation';
 
   let { children } = $props();
+
+  const publicPaths = ['/login', '/signup'];
+
+  onMount(async () => {
+    await authStore.check();
+    if (!authStore.user && !publicPaths.includes($page.url.pathname)) {
+      goto('/login');
+    }
+    if (authStore.user) {
+      await workspaceStore.load();
+    }
+  });
 
   let theme = $state<'light' | 'dark'>('light');
 
@@ -33,7 +50,15 @@
     </div>
   </nav>
 
-  <main class="p-6">
-    {@render children()}
-  </main>
+  {#if authStore.loading}
+    <div class="flex justify-center items-center min-h-screen">
+      <span class="loading loading-spinner loading-lg text-primary"></span>
+    </div>
+  {:else if !authStore.user && !publicPaths.includes($page.url.pathname)}
+    <!-- will redirect via onMount -->
+  {:else}
+    <main class="p-6">
+      {@render children()}
+    </main>
+  {/if}
 </div>

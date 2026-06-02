@@ -1,11 +1,14 @@
 <script lang="ts">
   import { blockStore } from '$lib/stores/blocks.svelte';
+  import { workspaceStore } from '$lib/stores/workspaces.svelte';
+  import { authStore } from '$lib/stores/auth.svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import type { PageSummary } from '$lib/types';
 
   let pages = $state<PageSummary[]>([]);
   let loading = $state(true);
+  let dropdownOpen = $state(false);
   let search = $state('');
   let activeId = $derived($page.params.id);
 
@@ -65,6 +68,37 @@
 
 <aside class="w-64 h-full bg-base-200 border-r border-base-300 flex flex-col">
   <div class="p-3 border-b border-base-300">
+    <div class="relative mb-2">
+      <button
+        onclick={() => dropdownOpen = !dropdownOpen}
+        class="w-full flex items-center justify-between px-3 py-2 bg-base-300 rounded-lg hover:bg-base-200 transition-colors text-sm font-medium"
+      >
+        <span>{workspaceStore.activeWorkspace?.name ?? 'Select workspace'}</span>
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {#if dropdownOpen}
+        <div class="absolute top-full left-0 right-0 mt-1 bg-base-100 border border-base-300 rounded-lg shadow-xl z-50 py-1">
+          {#each workspaceStore.workspaces as ws}
+            <button
+              onclick={() => { workspaceStore.switchWorkspace(ws.id); dropdownOpen = false; }}
+              class:bg-base-200={ws.id === workspaceStore.activeWorkspaceId}
+              class="w-full text-left px-3 py-2 text-sm hover:bg-base-200"
+            >
+              {ws.name}
+            </button>
+          {/each}
+          <hr class="border-base-200 my-1">
+          <button
+            onclick={async () => { const name = prompt('Workspace name'); if (name) await workspaceStore.create(name); dropdownOpen = false; }}
+            class="w-full text-left px-3 py-2 text-sm text-primary hover:bg-base-200"
+          >
+            + New workspace
+          </button>
+        </div>
+      {/if}
+    </div>
     <button onclick={createPage} class="btn btn-primary btn-sm w-full gap-2">
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -137,5 +171,14 @@
         {/each}
       </ul>
     {/if}
+  </div>
+
+  <div class="p-3 border-t border-base-300">
+    <button
+      onclick={async () => { await authStore.logout(); goto('/login'); }}
+      class="w-full text-left px-3 py-2 text-sm text-base-content/50 hover:text-error transition-colors"
+    >
+      Log out
+    </button>
   </div>
 </aside>
