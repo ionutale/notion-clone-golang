@@ -110,7 +110,7 @@ func (h *Handler) InviteMember(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if err := h.svc.InviteMember(r.Context(), id, req.Email, req.Role, userID); err != nil {
+	if err := h.svc.InviteMember(r.Context(), id, req.UserID, req.Role, userID); err != nil {
 		respondError(w, http.StatusForbidden, err.Error())
 		return
 	}

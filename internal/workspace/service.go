@@ -31,16 +31,19 @@ func (s *Service) Get(ctx context.Context, id string) (*Workspace, error) {
 }
 
 func (s *Service) Update(ctx context.Context, id, name, userID string) error {
-	ok, err := s.repo.IsMember(ctx, id, userID)
-	if err != nil || !ok {
+	w, err := s.repo.GetByID(ctx, id)
+	if w == nil || err != nil {
 		return ErrNotFound
+	}
+	if w.OwnerID != userID {
+		return ErrNotOwner
 	}
 	return s.repo.Update(ctx, id, name)
 }
 
 func (s *Service) Delete(ctx context.Context, id, userID string) error {
 	w, err := s.repo.GetByID(ctx, id)
-	if err != nil {
+	if w == nil || err != nil {
 		return ErrNotFound
 	}
 	if w.OwnerID != userID {
@@ -53,20 +56,20 @@ func (s *Service) IsMember(ctx context.Context, workspaceID, userID string) (boo
 	return s.repo.IsMember(ctx, workspaceID, userID)
 }
 
-func (s *Service) InviteMember(ctx context.Context, workspaceID, email, role, requesterID string) error {
+func (s *Service) InviteMember(ctx context.Context, workspaceID, memberID, role, requesterID string) error {
 	w, err := s.repo.GetByID(ctx, workspaceID)
-	if err != nil {
+	if w == nil || err != nil {
 		return ErrNotFound
 	}
 	if w.OwnerID != requesterID {
 		return ErrNotOwner
 	}
-	return nil
+	return s.repo.AddMember(ctx, workspaceID, memberID, role)
 }
 
 func (s *Service) RemoveMember(ctx context.Context, workspaceID, memberID, requesterID string) error {
 	w, err := s.repo.GetByID(ctx, workspaceID)
-	if err != nil {
+	if w == nil || err != nil {
 		return ErrNotFound
 	}
 	if w.OwnerID != requesterID {

@@ -3,6 +3,7 @@ package workspace
 import (
 	"context"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -15,8 +16,14 @@ func NewRepository(pool *pgxpool.Pool) *Repository {
 }
 
 func (r *Repository) Create(ctx context.Context, name, ownerID string) (*Workspace, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
 	w := &Workspace{}
-	err := r.pool.QueryRow(ctx,
+	err = tx.QueryRow(ctx,
 		`INSERT INTO workspaces (name, owner_id) VALUES ($1, $2)
 		 RETURNING id, name, owner_id, created_at`,
 		name, ownerID,
@@ -24,14 +31,14 @@ func (r *Repository) Create(ctx context.Context, name, ownerID string) (*Workspa
 	if err != nil {
 		return nil, err
 	}
-	_, err = r.pool.Exec(ctx,
+	_, err = tx.Exec(ctx,
 		`INSERT INTO workspace_members (workspace_id, user_id, role) VALUES ($1, $2, 'owner')`,
 		w.ID, ownerID,
 	)
 	if err != nil {
 		return nil, err
 	}
-	return w, nil
+	return w, tx.Commit(ctx)
 }
 
 func (r *Repository) ListByUser(ctx context.Context, userID string) ([]Workspace, error) {
@@ -55,6 +62,9 @@ func (r *Repository) ListByUser(ctx context.Context, userID string) ([]Workspace
 		}
 		workspaces = append(workspaces, w)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return workspaces, nil
 }
 
@@ -65,6 +75,9 @@ func (r *Repository) GetByID(ctx context.Context, id string) (*Workspace, error)
 		id,
 	).Scan(&w.ID, &w.Name, &w.OwnerID, &w.CreatedAt)
 	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return w, nil
