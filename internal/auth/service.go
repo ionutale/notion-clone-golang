@@ -35,7 +35,7 @@ func NewService(repo *Repository, wsCreator WorkspaceCreator) *Service {
 func (s *Service) Signup(ctx context.Context, req SignupRequest) (*AuthResponse, string, error) {
 	user, err := s.repo.CreateUser(ctx, req.Email, req.Password, req.Name)
 	if err != nil {
-		return nil, "", ErrEmailTaken
+		return nil, "", err
 	}
 	_, err = s.wsCreator.Create(ctx, user.Name+"'s Workspace", user.ID)
 	if err != nil {

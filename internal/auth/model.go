@@ -2,6 +2,10 @@ package auth
 
 import "time"
 
+type CtxKey string
+
+const CtxUserID CtxKey = "user_id"
+
 type User struct {
 	ID           string    `json:"id"`
 	Email        string    `json:"email"`

@@ -96,7 +96,7 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
-	userID, ok := r.Context().Value("user_id").(string)
+	userID, ok := r.Context().Value(CtxUserID).(string)
 	if !ok {
 		respondError(w, http.StatusUnauthorized, "not authenticated")
 		return
@@ -107,7 +107,7 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
-	userID, ok := r.Context().Value("user_id").(string)
+	userID, ok := r.Context().Value(CtxUserID).(string)
 	if !ok {
 		respondError(w, http.StatusUnauthorized, "not authenticated")
 		return
