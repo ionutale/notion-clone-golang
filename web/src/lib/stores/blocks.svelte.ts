@@ -1,0 +1,101 @@
+import { api } from '$lib/api';
+import type { Block, BlockType } from '$lib/types';
+
+class BlockStore {
+  blocks = $state<Map<string, Block>>(new Map());
+  pageId = $state<string | null>(null);
+  pageTitle = $state<string>('');
+  loading = $state(false);
+  error = $state<string | null>(null);
+
+  childrenMap = $derived.by(() => {
+    const map = new Map<string | null, string[]>();
+    for (const block of this.blocks.values()) {
+      const pid = block.parent_id;
+      if (!map.has(pid)) map.set(pid, []);
+      map.get(pid)!.push(block.id);
+    }
+    for (const [, ids] of map) {
+      ids.sort((a, b) => {
+        const ba = this.blocks.get(a)!;
+        const bb = this.blocks.get(b)!;
+        return ba.position - bb.position;
+      });
+    }
+    return map;
+  });
+
+  rootBlocks = $derived(this.childrenMap.get(null) ?? []);
+
+  async loadPage(id: string) {
+    this.loading = true;
+    this.error = null;
+    try {
+      const { page, blocks } = await api.getPageTree(id);
+      this.pageId = id;
+      this.pageTitle = page.content?.title ?? 'Untitled';
+      const map = new Map<string, Block>();
+      map.set(page.id, page);
+      for (const b of blocks) map.set(b.id, b);
+      this.blocks = map;
+    } catch (e: any) {
+      this.error = e.message ?? 'Failed to load page';
+    } finally {
+      this.loading = false;
+    }
+  }
+
+  async createBlock(
+    parentId: string | null,
+    type: BlockType,
+    content: any = {},
+    position?: number
+  ): Promise<Block> {
+    const block = await api.createBlock(parentId ?? this.pageId!, type, content, position);
+    this.blocks = new Map(this.blocks).set(block.id, block);
+    return block;
+  }
+
+  async updateBlock(id: string, data: { content?: any; type?: BlockType }): Promise<Block> {
+    const updated = await api.updateBlock(id, data);
+    this.blocks = new Map(this.blocks).set(id, updated);
+    return updated;
+  }
+
+  async deleteBlock(id: string): Promise<Block> {
+    const block = this.blocks.get(id)!;
+    await api.deleteBlock(id);
+    const next = new Map(this.blocks);
+    next.delete(id);
+    this.blocks = next;
+    return block;
+  }
+
+  async restoreBlock(id: string) {
+    const restored = await api.restoreBlock(id);
+    this.blocks = new Map(this.blocks).set(id, restored);
+  }
+
+  async moveBlock(id: string, parentId: string | null, position: number) {
+    const moved = await api.moveBlock(id, parentId, position);
+    this.blocks = new Map(this.blocks).set(id, moved);
+  }
+
+  createPage(title = 'Untitled'): Promise<Block> {
+    return api.createPage(title);
+  }
+
+  listPages() {
+    return api.listPages();
+  }
+
+  clear() {
+    this.blocks = new Map();
+    this.pageId = null;
+    this.pageTitle = '';
+    this.loading = false;
+    this.error = null;
+  }
+}
+
+export const blockStore = new BlockStore();
