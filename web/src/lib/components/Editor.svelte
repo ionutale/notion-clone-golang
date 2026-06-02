@@ -4,13 +4,10 @@
   import FormatToolbar from './FormatToolbar.svelte';
   import SlashMenu from './SlashMenu.svelte';
   import UndoToast from './UndoToast.svelte';
-  import { page } from '$app/stores';
-
   let { pageId } = $props<{ pageId: string }>();
 
   let slashMenu = $state<{ blockId: string; position: { x: number; y: number }; isTransform: boolean } | null>(null);
   let focusBlockId = $state<string | null>(null);
-  let undoStack = $state<Array<() => void>>([]);
 
   $effect(() => {
     if (pageId) {
@@ -40,15 +37,7 @@
   async function handlePageKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape') {
       slashMenu = null;
-    } else if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
-      e.preventDefault();
-      const undo = undoStack.pop();
-      if (undo) undo();
     }
-  }
-
-  function pushUndo(fn: () => void) {
-    undoStack = [...undoStack, fn];
   }
 
   async function addBlockAtBottom() {

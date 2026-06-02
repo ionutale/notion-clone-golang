@@ -9,6 +9,18 @@
   });
 
   let headingOpen = $state(false);
+  let headingContainer = $state<HTMLDivElement>();
+
+  $effect(() => {
+    if (!headingOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (headingContainer && !headingContainer.contains(e.target as Node)) {
+        headingOpen = false;
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  });
 
   function exec(cmd: string, val?: string) {
     document.execCommand(cmd, false, val);
@@ -58,7 +70,7 @@
   function handleHeading(type: string) {
     const blockId = findActiveBlock();
     if (blockId) {
-      blockStore.updateBlock(blockId, { type: type as any, content: { html: '' } });
+      blockStore.updateBlock(blockId, { type: type as any });
     }
     headingOpen = false;
   }
@@ -82,7 +94,7 @@
   }
 </script>
 
-<div class="flex flex-wrap items-center gap-1 px-3 py-2 mb-4 bg-base-200/70 rounded-xl border border-base-300 shadow-sm" onmousedown={(e) => e.preventDefault()}>
+<div class="flex flex-wrap items-center gap-1 px-3 py-2 mb-4 bg-base-200/70 rounded-xl border border-base-300 shadow-sm" role="toolbar" aria-label="Text formatting" onmousedown={(e) => e.preventDefault()}>
   <!-- Row 1: Inline Formatting -->
   <div class="flex items-center gap-1">
     <button
@@ -130,7 +142,7 @@
 
   <!-- Row 2: Block Actions -->
   <div class="flex items-center gap-1">
-    <div class="relative">
+    <div bind:this={headingContainer} class="relative">
       <button
         onclick={() => headingOpen = !headingOpen}
         class="btn btn-ghost btn-xs px-2"
@@ -140,9 +152,9 @@
       </button>
       {#if headingOpen}
         <div class="absolute top-full left-0 mt-1 w-36 bg-base-100 border border-base-300 rounded-lg shadow-xl z-50 py-1">
-          <button onclick={() => handleHeading('heading_1')} class="w-full text-left px-3 py-1.5 text-sm hover:bg-base-200 text-lg font-bold">H1</button>
-          <button onclick={() => handleHeading('heading_2')} class="w-full text-left px-3 py-1.5 text-sm hover:bg-base-200 text-base font-semibold">H2</button>
-          <button onclick={() => handleHeading('heading_3')} class="w-full text-left px-3 py-1.5 text-sm hover:bg-base-200 text-sm font-semibold">H3</button>
+          <button onclick={() => handleHeading('heading_1')} title="Heading 1" class="w-full text-left px-3 py-1.5 text-sm hover:bg-base-200 text-lg font-bold">H1</button>
+          <button onclick={() => handleHeading('heading_2')} title="Heading 2" class="w-full text-left px-3 py-1.5 text-sm hover:bg-base-200 text-base font-semibold">H2</button>
+          <button onclick={() => handleHeading('heading_3')} title="Heading 3" class="w-full text-left px-3 py-1.5 text-sm hover:bg-base-200 text-sm font-semibold">H3</button>
         </div>
       {/if}
     </div>
