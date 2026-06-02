@@ -117,6 +117,7 @@
     ondragleave={handleDragLeave}
     ondrop={handleDrop}
     role="listitem"
+    data-block-id={blockId}
   >
     <div class="flex items-start gap-0.5" style="margin-left: {depth * 1.5}rem;">
       <div class="flex items-center h-8 w-6 shrink-0 -ml-6 opacity-0 group-hover:opacity-100 transition-opacity">
