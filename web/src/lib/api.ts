@@ -74,7 +74,11 @@ class ApiClient {
   async uploadFile(file: File): Promise<{ url: string }> {
     const form = new FormData();
     form.append('file', file);
-    const res = await fetch(`${BASE_URL}/uploads`, { method: 'POST', body: form });
+    const opts: RequestInit = { method: 'POST', body: form };
+    if (authStore.accessToken) {
+      opts.headers = { 'Authorization': `Bearer ${authStore.accessToken}` };
+    }
+    const res = await fetch(`${BASE_URL}/uploads`, opts);
     if (!res.ok) throw new ApiError(res.status, await res.text());
     return res.json();
   }
