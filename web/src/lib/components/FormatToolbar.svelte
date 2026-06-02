@@ -83,7 +83,10 @@
     const sel = window.getSelection();
     if (!sel || !sel.rangeCount) return null;
     let el = sel.getRangeAt(0).commonAncestorContainer;
-    while (el && el instanceof HTMLElement) {
+    while (el && !(el instanceof HTMLElement)) {
+      el = el.parentElement;
+    }
+    while (el) {
       if (el.getAttribute('contenteditable') === 'true') {
         const wrapper = el.closest('[data-block-id]');
         return wrapper?.getAttribute('data-block-id');
