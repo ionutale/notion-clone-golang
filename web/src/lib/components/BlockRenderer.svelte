@@ -84,11 +84,11 @@
   function handleDragStart(e: DragEvent) {
     e.dataTransfer?.setData('text/plain', blockId);
     e.dataTransfer!.effectAllowed = 'move';
-    (e.target as HTMLElement)?.closest?.('.block-wrapper')?.classList.add('opacity-40');
+    (e.target as HTMLElement)?.closest?.('.block-wrapper')?.classList.add('drag-opacity');
   }
 
   function handleDragEnd() {
-    document.querySelectorAll('.opacity-40').forEach(el => el.classList.remove('opacity-40'));
+    document.querySelectorAll('.drag-opacity').forEach(el => el.classList.remove('drag-opacity'));
     dragOver = false;
   }
 
@@ -116,7 +116,7 @@
 
   function handleTouchStart(_e: TouchEvent) {
     const el = document.querySelector(`[data-block-id="${blockId}"]`);
-    el?.classList.add('opacity-40');
+    el?.classList.add('drag-opacity');
     touchDraggedId = blockId;
   }
 
@@ -138,14 +138,13 @@
     if (!touchDraggedId) return;
     const draggedId = touchDraggedId;
     touchDraggedId = null;
-    // Clean up visual state
-    document.querySelectorAll('.opacity-40').forEach(el => el.classList.remove('opacity-40'));
+    document.querySelectorAll('.drag-opacity').forEach(el => el.classList.remove('drag-opacity'));
     const indicator = document.querySelector('.drop-indicator');
     if (indicator) {
-      const targetEl = indicator.parentElement?.querySelector('[data-block-id]') as HTMLElement | null;
+      const targetWrapper = indicator.previousElementSibling as HTMLElement | null;
       indicator.remove();
-      if (targetEl) {
-        const targetId = targetEl.getAttribute('data-block-id');
+      if (targetWrapper) {
+        const targetId = targetWrapper.getAttribute('data-block-id');
         if (targetId && targetId !== draggedId) {
           const targetData = blockStore.blocks.get(targetId);
           if (targetData) {
@@ -169,6 +168,7 @@
     ondragleave={handleDragLeave}
     ondrop={handleDrop}
     ondragend={handleDragEnd}
+    ontouchcancel={handleTouchEnd}
     role="listitem"
     data-block-id={blockId}
   >
