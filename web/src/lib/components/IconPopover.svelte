@@ -55,11 +55,12 @@
   }
 </script>
 
+<svelte:window onkeydown={handleKeydown} />
+
 <div
   class="absolute z-50 w-72 rounded-xl shadow-xl border border-base-300 bg-base-100 overflow-hidden"
   onclick={(e) => e.stopPropagation()}
 >
-<svelte:window onkeydown={handleKeydown} />
   <div class="flex border-b border-base-200">
     <button
       role="tab"

@@ -4,7 +4,18 @@
   import FormatToolbar from './FormatToolbar.svelte';
   import SlashMenu from './SlashMenu.svelte';
   import UndoToast from './UndoToast.svelte';
+  import IconPopover from './IconPopover.svelte';
+  import { api } from '$lib/api';
+
   let { pageId } = $props<{ pageId: string }>();
+
+  let showIconPicker = $state(false);
+
+  function handleIconPickerOutsideClick(e: MouseEvent) {
+    if (showIconPicker) {
+      showIconPicker = false;
+    }
+  }
 
   let slashMenu = $state<{ blockId: string; position: { x: number; y: number }; isTransform: boolean } | null>(null);
   let focusBlockId = $state<string | null>(null);
@@ -46,7 +57,7 @@
   }
 </script>
 
-<svelte:window onkeydown={handlePageKeydown} />
+<svelte:window onkeydown={handlePageKeydown} onclick={handleIconPickerOutsideClick} />
 
 <div class="max-w-3xl mx-auto py-8 px-4">
   {#if blockStore.loading}
@@ -61,12 +72,50 @@
       <span>{blockStore.error}</span>
     </div>
   {:else}
-    <!-- Page Title -->
-    <h1
-      class="text-4xl font-bold mb-8 text-base-content outline-none"
-    >
-      {blockStore.pageTitle}
-    </h1>
+    <div class="flex items-start gap-4 mb-8">
+      {#if blockStore.pageIcon}
+        <button
+          onclick={() => showIconPicker = !showIconPicker}
+          class="shrink-0 w-12 h-12 flex items-center justify-center text-4xl rounded-xl hover:bg-base-200 transition-colors relative"
+        >
+          {#if blockStore.pageIconType === 'image'}
+            <img src={blockStore.pageIcon} alt="Page icon" class="w-12 h-12 rounded object-cover" />
+          {:else}
+            {blockStore.pageIcon}
+          {/if}
+        </button>
+      {:else}
+        <button
+          onclick={() => showIconPicker = !showIconPicker}
+          class="shrink-0 w-12 h-12 flex items-center justify-center text-2xl rounded-xl hover:bg-base-200 transition-colors text-base-content/20 hover:text-base-content/40"
+        >
+          +
+        </button>
+      {/if}
+      <h1 class="text-4xl font-bold text-base-content outline-none flex-1 min-w-0">
+        {blockStore.pageTitle}
+      </h1>
+    </div>
+
+    {#if showIconPicker}
+      <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+      <div
+        class="relative"
+        onclick={(e) => e.stopPropagation()}
+      >
+        <IconPopover
+          onselect={async (detail) => {
+            await blockStore.updateIcon(detail.value, detail.type);
+            showIconPicker = false;
+          }}
+          onremove={async () => {
+            await blockStore.updateIcon(null, null);
+            showIconPicker = false;
+          }}
+          onclose={() => showIconPicker = false}
+        />
+      </div>
+    {/if}
 
     <FormatToolbar />
 
