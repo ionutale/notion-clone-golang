@@ -83,6 +83,13 @@
 
   function handleDragStart(e: DragEvent) {
     e.dataTransfer?.setData('text/plain', blockId);
+    e.dataTransfer!.effectAllowed = 'move';
+    (e.target as HTMLElement)?.closest?.('.block-wrapper')?.classList.add('opacity-40');
+  }
+
+  function handleDragEnd() {
+    document.querySelectorAll('.opacity-40').forEach(el => el.classList.remove('opacity-40'));
+    dragOver = false;
   }
 
   function handleDragOver(e: DragEvent) {
@@ -104,6 +111,51 @@
     await blockStore.moveBlock(draggedId, parentId, block?.position ?? 0);
   }
 
+  // Touch drag support
+  let touchDraggedId = $state<string | null>(null);
+
+  function handleTouchStart(_e: TouchEvent) {
+    const el = document.querySelector(`[data-block-id="${blockId}"]`);
+    el?.classList.add('opacity-40');
+    touchDraggedId = blockId;
+  }
+
+  function handleTouchMove(e: TouchEvent) {
+    if (!touchDraggedId) return;
+    e.preventDefault();
+    const x = e.touches[0].clientX;
+    const y = e.touches[0].clientY;
+    // Remove old indicator
+    document.querySelectorAll('.drop-indicator').forEach(el => el.remove());
+    // Find block under finger
+    const target = document.elementFromPoint(x, y)?.closest('[data-block-id]') as HTMLElement | null;
+    if (target && target.getAttribute('data-block-id') !== touchDraggedId) {
+      target.insertAdjacentHTML('afterend', '<div class="drop-indicator h-0.5 bg-primary rounded-full mx-1"></div>');
+    }
+  }
+
+  function handleTouchEnd(_e: TouchEvent) {
+    if (!touchDraggedId) return;
+    const draggedId = touchDraggedId;
+    touchDraggedId = null;
+    // Clean up visual state
+    document.querySelectorAll('.opacity-40').forEach(el => el.classList.remove('opacity-40'));
+    const indicator = document.querySelector('.drop-indicator');
+    if (indicator) {
+      const targetEl = indicator.parentElement?.querySelector('[data-block-id]') as HTMLElement | null;
+      indicator.remove();
+      if (targetEl) {
+        const targetId = targetEl.getAttribute('data-block-id');
+        if (targetId && targetId !== draggedId) {
+          const targetData = blockStore.blocks.get(targetId);
+          if (targetData) {
+            blockStore.moveBlock(draggedId, targetData.parent_id ?? null, targetData.position ?? 0);
+          }
+        }
+      }
+    }
+  }
+
   let needFocus = $derived(focusBlockId === blockId);
 </script>
 
@@ -116,12 +168,20 @@
     ondragover={handleDragOver}
     ondragleave={handleDragLeave}
     ondrop={handleDrop}
+    ondragend={handleDragEnd}
     role="listitem"
     data-block-id={blockId}
   >
     <div class="flex items-start gap-0.5" style="margin-left: {depth * 1.5}rem;">
       <div class="flex items-center h-8 w-6 shrink-0 -ml-6 opacity-0 group-hover:opacity-100 transition-opacity">
-        <BlockDragHandle {blockId} onDragStart={handleDragStart} visible={hovered} />
+        <BlockDragHandle
+          {blockId}
+          onDragStart={handleDragStart}
+          visible={hovered}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+        />
       </div>
       <div class="flex-1 min-w-0">
         {#if block.type === 'text'}
