@@ -235,3 +235,9 @@
     <div class="h-0.5 bg-primary rounded-full mx-1 transition-all"></div>
   {/if}
 {/if}
+
+<style>
+  .drag-opacity {
+    opacity: 0.4;
+  }
+</style>
