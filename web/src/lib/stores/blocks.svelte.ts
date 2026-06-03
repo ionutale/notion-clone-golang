@@ -5,6 +5,8 @@ class BlockStore {
   blocks = $state<Map<string, Block>>(new Map());
   pageId = $state<string | null>(null);
   pageTitle = $state<string>('');
+  pageIcon = $derived(this.blocks.get(this.pageId ?? '')?.content?.icon ?? null);
+  pageIconType = $derived(this.blocks.get(this.pageId ?? '')?.content?.icon_type ?? null);
   loading = $state(false);
   error = $state<string | null>(null);
 
@@ -60,6 +62,17 @@ class BlockStore {
     const updated = await api.updateBlock(id, data);
     this.blocks = new Map(this.blocks).set(id, updated);
     return updated;
+  }
+
+  async updateIcon(icon: string | null, iconType: string | null) {
+    const block = this.blocks.get(this.pageId ?? '');
+    if (!block) return;
+    const content = { ...block.content, icon, icon_type: iconType };
+    if (icon === null) {
+      delete content.icon;
+      delete content.icon_type;
+    }
+    await this.updateBlock(this.pageId!, { content });
   }
 
   async deleteBlock(id: string): Promise<Block> {
