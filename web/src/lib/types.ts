@@ -39,5 +39,7 @@ export interface User {
 export interface PageSummary {
   id: string;
   title: string;
+  icon?: string | null;
+  icon_type?: string | null;
   created_at: string;
 }
