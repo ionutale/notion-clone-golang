@@ -13,6 +13,7 @@
 
   let tab = $state<'emoji' | 'image'>('emoji');
   let urlInput = $state('');
+  let uploading = $state(false);
 
   const emojis = [
     '😀', '🎉', '🚀', '💡', '📝', '🔥', '⭐', '💻', '🎯', '📚',
@@ -31,9 +32,17 @@
     const input = e.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
-    const result = await api.uploadFile(file);
-    onselect?.({ type: 'image', value: result.url });
-    onclose?.();
+    uploading = true;
+    try {
+      const { url } = await api.uploadFile(file);
+      onselect?.({ type: 'image', value: url });
+      onclose?.();
+    } catch {
+      // upload failed silently - the parent can handle via toast
+    } finally {
+      uploading = false;
+      input.value = '';
+    }
   }
 
   function setImageUrl() {
@@ -41,14 +50,21 @@
     onselect?.({ type: 'image', value: urlInput.trim() });
     onclose?.();
   }
+  function handleKeydown(e: KeyboardEvent) {
+    if (e.key === 'Escape') onclose?.();
+  }
 </script>
 
 <div
   class="absolute z-50 w-72 rounded-xl shadow-xl border border-base-300 bg-base-100 overflow-hidden"
   onclick={(e) => e.stopPropagation()}
 >
+<svelte:window onkeydown={handleKeydown} />
   <div class="flex border-b border-base-200">
     <button
+      role="tab"
+      aria-selected={tab === 'emoji'}
+      aria-controls="icon-tabpanel"
       class="flex-1 px-4 py-2.5 text-sm font-medium transition-colors"
       class:text-primary={tab === 'emoji'}
       class:border-b-2={tab === 'emoji'}
@@ -58,6 +74,9 @@
       Emoji
     </button>
     <button
+      role="tab"
+      aria-selected={tab === 'image'}
+      aria-controls="icon-tabpanel"
       class="flex-1 px-4 py-2.5 text-sm font-medium transition-colors"
       class:text-primary={tab === 'image'}
       class:border-b-2={tab === 'image'}
@@ -68,7 +87,7 @@
     </button>
   </div>
 
-  <div class="p-3">
+  <div role="tabpanel" id="icon-tabpanel" class="p-3">
     {#if tab === 'emoji'}
       <div class="grid grid-cols-5 gap-1">
         {#each emojis as emoji}
@@ -82,21 +101,10 @@
       </div>
     {:else}
       <div class="space-y-3">
-        <label class="flex">
-          <input
-            type="file"
-            accept="image/*"
-            class="hidden"
-            onchange={handleUpload}
-            id="icon-upload-input"
-          />
-          <button
-            class="btn btn-outline btn-sm w-full"
-            onclick={() => document.getElementById('icon-upload-input')?.click()}
-          >
-            Upload Image
-          </button>
+        <label for="icon-upload-input" class="btn btn-outline btn-sm w-full" class:btn-disabled={uploading}>
+          {uploading ? 'Uploading...' : 'Upload image'}
         </label>
+        <input id="icon-upload-input" type="file" accept="image/*" onchange={handleUpload} class="hidden" disabled={uploading} />
 
         <div class="flex items-center gap-2">
           <div class="flex-1 h-px bg-base-300"></div>
