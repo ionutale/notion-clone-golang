@@ -3,6 +3,7 @@ package block
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -269,6 +270,42 @@ func (r *Repository) GetSiblings(ctx context.Context, parentID *uuid.UUID, works
 		blocks = append(blocks, b)
 	}
 	return blocks, nil
+}
+
+func (r *Repository) PermanentDelete(ctx context.Context, id uuid.UUID) error {
+	_, err := r.pool.Exec(ctx, `DELETE FROM blocks WHERE id = $1`, id)
+	return err
+}
+
+func (r *Repository) ListTrash(ctx context.Context, workspaceID uuid.UUID) ([]PageSummary, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT id, content->>'title' AS title, content->>'icon' AS icon, content->>'icon_type' AS icon_type, created_at, updated_at
+		FROM blocks
+		WHERE workspace_id = $1 AND type = 'page' AND parent_id IS NULL AND deleted_at IS NOT NULL
+		ORDER BY deleted_at DESC
+	`, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var pages []PageSummary
+	for rows.Next() {
+		var p PageSummary
+		if err := rows.Scan(&p.ID, &p.Title, &p.Icon, &p.IconType, &p.CreatedAt, &p.UpdatedAt); err != nil {
+			return nil, err
+		}
+		pages = append(pages, p)
+	}
+	return pages, nil
+}
+
+func (r *Repository) CleanupExpired(ctx context.Context, workspaceID uuid.UUID, days int) error {
+	_, err := r.pool.Exec(ctx, `
+		DELETE FROM blocks
+		WHERE workspace_id = $1 AND deleted_at IS NOT NULL AND deleted_at < now() - ($2 || ' days')::interval
+	`, workspaceID, fmt.Sprintf("%d", days))
+	return err
 }
 
 func (r *Repository) InsertAtPosition(ctx context.Context, b *Block, position int64) error {

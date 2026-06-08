@@ -147,6 +147,23 @@ func (s *Service) MoveBlock(ctx context.Context, id uuid.UUID, req MoveBlockRequ
 	return s.repo.Move(ctx, id, moveReq)
 }
 
+func (s *Service) Search(ctx context.Context, query string, limit, offset int) ([]SearchResult, error) {
+	return s.repo.Search(ctx, s.defaultWorkspaceID, query, limit, offset)
+}
+
+func (s *Service) ListFavorites(ctx context.Context) ([]PageSummary, error) {
+	return s.repo.ListFavorites(ctx, s.defaultWorkspaceID)
+}
+
+func (s *Service) ListTrash(ctx context.Context) ([]PageSummary, error) {
+	_ = s.repo.CleanupExpired(ctx, s.defaultWorkspaceID, 30)
+	return s.repo.ListTrash(ctx, s.defaultWorkspaceID)
+}
+
+func (s *Service) PermanentDelete(ctx context.Context, id uuid.UUID) error {
+	return s.repo.PermanentDelete(ctx, id)
+}
+
 func (s *Service) SplitBlock(ctx context.Context, id uuid.UUID, splitPosition int) (Block, Block, error) {
 	original, err := s.repo.GetByID(ctx, id)
 	if err != nil {

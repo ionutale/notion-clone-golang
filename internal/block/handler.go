@@ -3,6 +3,7 @@ package block
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -147,4 +148,73 @@ func (h *Handler) MoveBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	respond(w, http.StatusOK, block)
+}
+
+func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query().Get("q")
+	if query == "" {
+		respondError(w, http.StatusBadRequest, "query parameter 'q' is required")
+		return
+	}
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+	if offset < 0 {
+		offset = 0
+	}
+
+	results, err := h.svc.Search(r.Context(), query, limit, offset)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	respond(w, http.StatusOK, results)
+}
+
+func (h *Handler) ListFavorites(w http.ResponseWriter, r *http.Request) {
+	pages, err := h.svc.ListFavorites(r.Context())
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	respond(w, http.StatusOK, pages)
+}
+
+func (h *Handler) ListTrash(w http.ResponseWriter, r *http.Request) {
+	pages, err := h.svc.ListTrash(r.Context())
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	respond(w, http.StatusOK, pages)
+}
+
+func (h *Handler) PermanentDelete(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	if err := h.svc.PermanentDelete(r.Context(), id); err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) RegisterRoutes(r chi.Router) {
+	r.Get("/pages", h.ListPages)
+	r.Post("/pages", h.CreatePage)
+	r.Get("/pages/{id}", h.GetPageTree)
+	r.Post("/blocks", h.CreateBlock)
+	r.Patch("/blocks/{id}", h.UpdateBlock)
+	r.Delete("/blocks/{id}", h.DeleteBlock)
+	r.Patch("/blocks/{id}/restore", h.RestoreBlock)
+	r.Patch("/blocks/{id}/move", h.MoveBlock)
+	r.Get("/search", h.Search)
+	r.Get("/favorites", h.ListFavorites)
+	r.Get("/trash", h.ListTrash)
+	r.Delete("/blocks/{id}/permanent", h.PermanentDelete)
 }
