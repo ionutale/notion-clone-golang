@@ -16,6 +16,16 @@
     search ? pages.filter(p => p.title.toLowerCase().includes(search.toLowerCase())) : pages
   );
 
+  let draggedId = $state<string | null>(null);
+  let dragOverId = $state<string | null>(null);
+  let dragPosition = $state<'before' | 'after' | null>(null);
+
+  let touchDragging = $state(false);
+  let touchTimer: ReturnType<typeof setTimeout> | undefined;
+  let touchStartY = $state(0);
+  let touchStartX = $state(0);
+  let draggedEl: HTMLElement | null = null;
+
   async function loadPages() {
     loading = true;
     try {
@@ -33,7 +43,7 @@
 
   async function createPage() {
     const page = await blockStore.createPage();
-    pages = [...pages, { id: page.id, title: page.content?.title ?? 'Untitled', icon: page.content?.icon, icon_type: page.content?.icon_type, created_at: page.created_at }];
+    pages = [...pages, { id: page.id, title: page.content?.title ?? 'Untitled', icon: page.content?.icon, icon_type: page.content?.icon_type, position: page.position, created_at: page.created_at }];
     goto(`/pages/${page.id}`);
   }
 
@@ -63,6 +73,142 @@
       pages = pages.map(p => p.id === id ? { ...p, title: editTitle.trim() } : p);
     }
     editingId = null;
+  }
+
+  function calcDropPosition(
+    pages: PageSummary[], draggedId: string, dropId: string, position: 'before' | 'after'
+  ): { newPos: number; fromIdx: number; toIdx: number } {
+    const fromIdx = pages.findIndex(p => p.id === draggedId);
+    const toIdx = pages.findIndex(p => p.id === dropId);
+    let newPos: number;
+    if (position === 'before') {
+      if (toIdx === 0) {
+        newPos = pages[0].position / 2;
+      } else {
+        newPos = (pages[toIdx - 1].position + pages[toIdx].position) / 2;
+      }
+    } else {
+      if (toIdx === pages.length - 1) {
+        newPos = pages[pages.length - 1].position + 1;
+      } else if (toIdx + 1 === fromIdx) {
+        newPos = (pages[toIdx].position + pages[toIdx + 2].position) / 2;
+      } else {
+        newPos = (pages[toIdx].position + pages[toIdx + 1].position) / 2;
+      }
+    }
+    return { newPos, fromIdx, toIdx };
+  }
+
+  function optimisticReorder(
+    pages: PageSummary[], draggedId: string, dropId: string, newPos: number, position: 'before' | 'after'
+  ): PageSummary[] {
+    const fromIdx = pages.findIndex(p => p.id === draggedId);
+    const toIdx = pages.findIndex(p => p.id === dropId);
+    const item = pages[fromIdx];
+    const updated = pages.filter(p => p.id !== draggedId);
+    const adjustedToIdx = fromIdx < toIdx ? toIdx - 1 : toIdx;
+    const insertAt = position === 'before' ? adjustedToIdx : adjustedToIdx + 1;
+    updated.splice(insertAt, 0, { ...item, position: newPos });
+    return updated;
+  }
+
+  function handleDragStart(e: DragEvent, id: string) {
+    if (search) return;
+    draggedId = id;
+    e.dataTransfer!.setData('text/plain', id);
+    e.dataTransfer!.effectAllowed = 'move';
+    requestAnimationFrame(() => {
+      (e.currentTarget as HTMLElement).classList.add('opacity-50');
+    });
+  }
+
+  function handleDragOver(e: DragEvent, id: string) {
+    if (!draggedId || draggedId === id || search) return;
+    e.preventDefault();
+    e.dataTransfer!.dropEffect = 'move';
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const mid = rect.top + rect.height / 2;
+    dragOverId = id;
+    dragPosition = e.clientY < mid ? 'before' : 'after';
+  }
+
+  function handleDrop(e: DragEvent, dropId: string) {
+    e.preventDefault();
+    if (!draggedId || draggedId === dropId || search || !dragPosition) {
+      dragOverId = null;
+      dragPosition = null;
+      draggedId = null;
+      return;
+    }
+    const { newPos } = calcDropPosition(pages, draggedId, dropId, dragPosition);
+    pages = optimisticReorder(pages, draggedId, dropId, newPos, dragPosition);
+    blockStore.moveBlock(draggedId, null, newPos).catch(() => loadPages());
+    dragOverId = null;
+    dragPosition = null;
+    draggedId = null;
+  }
+
+  function handleDragEnd() {
+    dragOverId = null;
+    dragPosition = null;
+    draggedId = null;
+  }
+
+  function handleTouchStart(e: TouchEvent, id: string) {
+    if (search || editingId === id) return;
+    touchStartY = e.touches[0].clientY;
+    touchStartX = e.touches[0].clientX;
+    draggedEl = e.currentTarget as HTMLElement;
+    touchTimer = setTimeout(() => {
+      touchDragging = true;
+      draggedId = id;
+      if (draggedEl) draggedEl.classList.add('opacity-50');
+    }, 500);
+  }
+
+  function handleTouchMove(e: TouchEvent) {
+    if (!touchDragging) {
+      const dy = Math.abs(e.touches[0].clientY - touchStartY);
+      const dx = Math.abs(e.touches[0].clientX - touchStartX);
+      if (dy > 10 || dx > 10) clearTimeout(touchTimer);
+      return;
+    }
+    e.preventDefault();
+    const touchY = e.touches[0].clientY;
+    const items = document.querySelectorAll<HTMLElement>('[data-page-id]');
+    let found = false;
+    for (const item of items) {
+      const rect = item.getBoundingClientRect();
+      if (touchY >= rect.top && touchY <= rect.bottom) {
+        const id = item.dataset.pageId!;
+        if (id !== draggedId) {
+          dragOverId = id;
+          dragPosition = touchY < rect.top + rect.height / 2 ? 'before' : 'after';
+        }
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      dragOverId = null;
+      dragPosition = null;
+    }
+  }
+
+  function handleTouchEnd() {
+    clearTimeout(touchTimer);
+    if (!touchDragging) return;
+    touchDragging = false;
+    if (draggedId && dragOverId && dragPosition) {
+      const { newPos } = calcDropPosition(pages, draggedId, dragOverId, dragPosition);
+      pages = optimisticReorder(pages, draggedId, dragOverId, newPos, dragPosition);
+      blockStore.moveBlock(draggedId, null, newPos).catch(() => loadPages());
+    }
+    if (draggedEl) draggedEl.classList.remove('opacity-50');
+    dragOverId = null;
+    dragPosition = null;
+    draggedId = null;
+    draggedEl = null;
   }
 </script>
 
@@ -128,11 +274,38 @@
     {:else}
       <ul class="menu menu-sm p-1">
         {#each filtered as p (p.id)}
-          <li>
+          <li
+            draggable={search === '' && editingId !== p.id}
+            ondragstart={(e) => handleDragStart(e, p.id)}
+            ondragover={(e) => handleDragOver(e, p.id)}
+            ondrop={(e) => handleDrop(e, p.id)}
+            ondragend={handleDragEnd}
+            ontouchstart={(e) => handleTouchStart(e, p.id)}
+            ontouchmove={handleTouchMove}
+            ontouchend={handleTouchEnd}
+            data-page-id={p.id}
+            class="group"
+            class:opacity-50={draggedId === p.id}
+          >
+            {#if dragOverId === p.id && dragPosition === 'before'}
+              <div class="h-0.5 bg-primary rounded-full mb-0.5"></div>
+            {/if}
             <div
               class="flex items-center gap-2 rounded-lg"
               class:active={p.id === activeId}
             >
+              {#if editingId !== p.id}
+                <span class="drag-handle cursor-grab text-base-content/20 hover:text-base-content/40 transition-colors px-0.5 select-none opacity-0 group-hover:opacity-100">
+                  <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                    <circle cx="9" cy="5" r="1.5" />
+                    <circle cx="15" cy="5" r="1.5" />
+                    <circle cx="9" cy="12" r="1.5" />
+                    <circle cx="15" cy="12" r="1.5" />
+                    <circle cx="9" cy="19" r="1.5" />
+                    <circle cx="15" cy="19" r="1.5" />
+                  </svg>
+                </span>
+              {/if}
               {#if editingId === p.id}
                 <input
                   type="text"
@@ -173,6 +346,9 @@
                 </svg>
               </button>
             </div>
+            {#if dragOverId === p.id && dragPosition === 'after'}
+              <div class="h-0.5 bg-primary rounded-full mt-0.5"></div>
+            {/if}
           </li>
         {/each}
       </ul>

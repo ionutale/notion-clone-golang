@@ -41,5 +41,6 @@ export interface PageSummary {
   title: string;
   icon?: string | null;
   icon_type?: string | null;
+  position: number;
   created_at: string;
 }

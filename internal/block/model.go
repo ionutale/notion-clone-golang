@@ -64,6 +64,7 @@ type PageSummary struct {
 	Title     string    `json:"title"`
 	Icon      string    `json:"icon,omitempty"`
 	IconType  string    `json:"icon_type,omitempty"`
+	Position  int64     `json:"position"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -71,4 +72,13 @@ type PageSummary struct {
 type PageTree struct {
 	Page   Block   `json:"page"`
 	Blocks []Block `json:"blocks"`
+}
+
+type SearchResult struct {
+	BlockID   uuid.UUID `json:"block_id"`
+	PageID    uuid.UUID `json:"page_id"`
+	PageTitle string    `json:"page_title"`
+	BlockType string    `json:"block_type"`
+	Excerpt   string    `json:"excerpt"`
+	Rank      float64   `json:"rank"`
 }

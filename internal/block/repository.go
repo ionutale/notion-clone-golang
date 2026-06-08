@@ -108,7 +108,7 @@ func (r *Repository) GetTree(ctx context.Context, pageID uuid.UUID) ([]Block, er
 
 func (r *Repository) ListPages(ctx context.Context, workspaceID uuid.UUID) ([]PageSummary, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT id, content->>'title' AS title, content->>'icon' AS icon, content->>'icon_type' AS icon_type, created_at, updated_at
+		SELECT id, content->>'title' AS title, content->>'icon' AS icon, content->>'icon_type' AS icon_type, position, created_at, updated_at
 		FROM blocks
 		WHERE workspace_id = $1 AND type = 'page' AND parent_id IS NULL AND deleted_at IS NULL
 		ORDER BY position`, workspaceID)
@@ -120,7 +120,7 @@ func (r *Repository) ListPages(ctx context.Context, workspaceID uuid.UUID) ([]Pa
 	var pages []PageSummary
 	for rows.Next() {
 		var p PageSummary
-		if err := rows.Scan(&p.ID, &p.Title, &p.Icon, &p.IconType, &p.CreatedAt, &p.UpdatedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.Title, &p.Icon, &p.IconType, &p.Position, &p.CreatedAt, &p.UpdatedAt); err != nil {
 			return nil, err
 		}
 		pages = append(pages, p)
@@ -169,6 +169,71 @@ func (r *Repository) Move(ctx context.Context, id uuid.UUID, req MoveBlockReques
 func (r *Repository) UpdatePath(ctx context.Context, id uuid.UUID, path string) error {
 	_, err := r.pool.Exec(ctx, `UPDATE blocks SET path = $1::ltree, updated_at = now() WHERE id = $2`, path, id)
 	return err
+}
+
+func (r *Repository) Search(ctx context.Context, workspaceID uuid.UUID, query string, limit, offset int) ([]SearchResult, error) {
+	rows, err := r.pool.Query(ctx, `
+		WITH RECURSIVE page_ancestors AS (
+			SELECT b.id, b.id AS page_id, b.content->>'title' AS page_title
+			FROM blocks b
+			WHERE b.type = 'page' AND b.parent_id IS NULL AND b.deleted_at IS NULL
+
+			UNION ALL
+
+			SELECT b.id, pa.page_id, pa.page_title
+			FROM blocks b
+			JOIN page_ancestors pa ON b.parent_id = pa.id
+			WHERE b.deleted_at IS NULL
+		)
+		SELECT b.id AS block_id, pa.page_id, pa.page_title, b.type AS block_type,
+			left(regexp_replace(coalesce(b.content->>'html', b.content->>'title', ''), '<[^>]+>', '', 'g'), 150) AS excerpt,
+			ts_rank(b.search_vector, plainto_tsquery('english', $2)) AS rank
+		FROM blocks b
+		JOIN page_ancestors pa ON b.id = pa.id
+		WHERE b.workspace_id = $1
+		  AND b.search_vector @@ plainto_tsquery('english', $2)
+		  AND b.deleted_at IS NULL
+		ORDER BY rank DESC
+		LIMIT $3 OFFSET $4
+	`, workspaceID, query, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []SearchResult
+	for rows.Next() {
+		var r SearchResult
+		if err := rows.Scan(&r.BlockID, &r.PageID, &r.PageTitle, &r.BlockType, &r.Excerpt, &r.Rank); err != nil {
+			return nil, err
+		}
+		results = append(results, r)
+	}
+	return results, nil
+}
+
+func (r *Repository) ListFavorites(ctx context.Context, workspaceID uuid.UUID) ([]PageSummary, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT id, content->>'title' AS title, content->>'icon' AS icon, content->>'icon_type' AS icon_type, position, created_at, updated_at
+		FROM blocks
+		WHERE workspace_id = $1 AND type = 'page' AND parent_id IS NULL AND deleted_at IS NULL
+		  AND (content->>'favorited')::boolean = true
+		ORDER BY position
+	`, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var pages []PageSummary
+	for rows.Next() {
+		var p PageSummary
+		if err := rows.Scan(&p.ID, &p.Title, &p.Icon, &p.IconType, &p.Position, &p.CreatedAt, &p.UpdatedAt); err != nil {
+			return nil, err
+		}
+		pages = append(pages, p)
+	}
+	return pages, nil
 }
 
 func MiddlePosition(before, after *int64) int64 {
