@@ -1,5 +1,6 @@
 services:
   db:
+    container_name: postgres-17-db
     image: postgres:17-alpine
     environment:
       POSTGRES_DB: notion
@@ -16,12 +17,29 @@ services:
       retries: 5
 
   storage:
+    container_name: file-storage-bucket
     image: fsouza/fake-gcs-server:latest
     ports:
       - "4443:4443"
     volumes:
       - gcsdata:/storage/data
     command: ["-scheme", "http", "-public-host", "localhost:4443"]
+
+  app:
+    container_name: notion-clone-app
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      DATABASE_URL: postgres://notion:notion@postgres-17-db:5432/notion?sslmode=disable
+      PORT: "8080"
+      STORAGE_EMULATOR_HOST: http://file-storage-bucket:4443
+      JWT_SECRET: development-jwt-secret-change-in-production
+    depends_on:
+      db:
+        condition: service_healthy
 
 volumes:
   pgdata:
