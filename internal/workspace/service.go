@@ -10,11 +10,22 @@ var (
 	ErrNotOwner = errors.New("only the owner can perform this action")
 )
 
-type Service struct {
-	repo *Repository
+type WorkspaceRepository interface {
+	Create(ctx context.Context, name, ownerID string) (*Workspace, error)
+	ListByUser(ctx context.Context, userID string) ([]Workspace, error)
+	GetByID(ctx context.Context, id string) (*Workspace, error)
+	Update(ctx context.Context, id, name string) error
+	Delete(ctx context.Context, id string) error
+	IsMember(ctx context.Context, workspaceID, userID string) (bool, error)
+	AddMember(ctx context.Context, workspaceID, userID, role string) error
+	RemoveMember(ctx context.Context, workspaceID, userID string) error
 }
 
-func NewService(repo *Repository) *Service {
+type Service struct {
+	repo WorkspaceRepository
+}
+
+func NewService(repo WorkspaceRepository) *Service {
 	return &Service{repo: repo}
 }
 

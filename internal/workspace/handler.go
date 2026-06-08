@@ -70,7 +70,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "workspaceId")
 	ws, err := h.svc.Get(r.Context(), id)
-	if err != nil {
+	if err != nil || ws == nil {
 		respondError(w, http.StatusNotFound, "workspace not found")
 		return
 	}
