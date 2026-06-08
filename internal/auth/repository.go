@@ -61,13 +61,38 @@ func (r *Repository) GetUserByEmail(ctx context.Context, email string) (*User, e
 func (r *Repository) GetUserByID(ctx context.Context, id string) (*User, error) {
 	user := &User{}
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, email, name, created_at FROM users WHERE id = $1`,
+		`SELECT id, email, password_hash, name, created_at FROM users WHERE id = $1`,
 		id,
-	).Scan(&user.ID, &user.Email, &user.Name, &user.CreatedAt)
+	).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.Name, &user.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
 	return user, nil
+}
+
+func (r *Repository) UpdateUser(ctx context.Context, id, name, email string) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE users SET name = $1, email = $2 WHERE id = $3`,
+		name, email, id,
+	)
+	return err
+}
+
+func (r *Repository) UpdatePassword(ctx context.Context, id, password string) error {
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	_, err = r.pool.Exec(ctx,
+		`UPDATE users SET password_hash = $1 WHERE id = $2`,
+		string(hash), id,
+	)
+	return err
+}
+
+func (r *Repository) DeleteUser(ctx context.Context, id string) error {
+	_, err := r.pool.Exec(ctx, `DELETE FROM users WHERE id = $1`, id)
+	return err
 }
 
 func hashToken(bytes []byte) string {

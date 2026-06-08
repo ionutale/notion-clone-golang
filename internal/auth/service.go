@@ -18,13 +18,25 @@ type WorkspaceCreator interface {
 	Create(ctx context.Context, name, ownerID string) (interface{}, error)
 }
 
+type UserRepository interface {
+	CreateUser(ctx context.Context, email, password, name string) (*User, error)
+	GetUserByEmail(ctx context.Context, email string) (*User, error)
+	GetUserByID(ctx context.Context, id string) (*User, error)
+	CreateRefreshToken(ctx context.Context, userID, expiresAt string) (string, error)
+	GetUserByRefreshToken(ctx context.Context, tokenHex string) (*User, error)
+	DeleteUserRefreshTokens(ctx context.Context, userID string) error
+	UpdateUser(ctx context.Context, id, name, email string) error
+	UpdatePassword(ctx context.Context, id, password string) error
+	DeleteUser(ctx context.Context, id string) error
+}
+
 type Service struct {
-	repo      *Repository
+	repo      UserRepository
 	wsCreator WorkspaceCreator
 	jwtSecret string
 }
 
-func NewService(repo *Repository, wsCreator WorkspaceCreator) *Service {
+func NewService(repo UserRepository, wsCreator WorkspaceCreator) *Service {
 	secret := os.Getenv("JWT_SECRET")
 	if secret == "" {
 		secret = "dev-secret-change-in-production"
@@ -101,4 +113,65 @@ func (s *Service) ValidateToken(tokenString string) (string, error) {
 
 func (s *Service) GetUser(ctx context.Context, userID string) (*User, error) {
 	return s.repo.GetUserByID(ctx, userID)
+}
+
+func (s *Service) UpdateProfile(ctx context.Context, id, name, email, currentPassword string) (*User, error) {
+	user, err := s.repo.GetUserByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(currentPassword)) != nil {
+		return nil, ErrInvalidCredentials
+	}
+
+	if email != "" && email != user.Email {
+		existing, err := s.repo.GetUserByEmail(ctx, email)
+		if err == nil && existing.ID != id {
+			return nil, ErrEmailTaken
+		}
+	}
+
+	if name == "" {
+		name = user.Name
+	}
+	if email == "" {
+		email = user.Email
+	}
+
+	if err := s.repo.UpdateUser(ctx, id, name, email); err != nil {
+		return nil, err
+	}
+
+	return s.repo.GetUserByID(ctx, id)
+}
+
+func (s *Service) UpdatePassword(ctx context.Context, id, currentPassword, newPassword string) error {
+	user, err := s.repo.GetUserByID(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	if bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(currentPassword)) != nil {
+		return ErrInvalidCredentials
+	}
+
+	return s.repo.UpdatePassword(ctx, id, newPassword)
+}
+
+func (s *Service) DeleteAccount(ctx context.Context, id, password string) error {
+	user, err := s.repo.GetUserByID(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	if bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)) != nil {
+		return ErrInvalidCredentials
+	}
+
+	if err := s.repo.DeleteUserRefreshTokens(ctx, id); err != nil {
+		return err
+	}
+
+	return s.repo.DeleteUser(ctx, id)
 }

@@ -24,6 +24,9 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Post("/auth/refresh", h.Refresh)
 	r.Post("/auth/logout", h.Logout)
 	r.Get("/auth/me", h.Me)
+	r.Patch("/auth/me", h.UpdateProfile)
+	r.Patch("/auth/me/password", h.UpdatePassword)
+	r.Delete("/auth/me", h.DeleteAccount)
 }
 
 func (h *Handler) setRefreshCookie(w http.ResponseWriter, token string) {
@@ -118,6 +121,99 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	respond(w, http.StatusOK, user)
+}
+
+func (h *Handler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value(CtxUserID).(string)
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "not authenticated")
+		return
+	}
+
+	var req struct {
+		Name            string `json:"name"`
+		Email           string `json:"email"`
+		CurrentPassword string `json:"current_password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	user, err := h.svc.UpdateProfile(r.Context(), userID, req.Name, req.Email, req.CurrentPassword)
+	if err != nil {
+		code := http.StatusInternalServerError
+		switch err {
+		case ErrInvalidCredentials:
+			code = http.StatusUnauthorized
+		case ErrEmailTaken:
+			code = http.StatusConflict
+		}
+		respondError(w, code, err.Error())
+		return
+	}
+
+	respond(w, http.StatusOK, user)
+}
+
+func (h *Handler) UpdatePassword(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value(CtxUserID).(string)
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "not authenticated")
+		return
+	}
+
+	var req struct {
+		CurrentPassword string `json:"current_password"`
+		NewPassword     string `json:"new_password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if len(req.NewPassword) < 8 {
+		respondError(w, http.StatusBadRequest, "password must be at least 8 characters")
+		return
+	}
+
+	if err := h.svc.UpdatePassword(r.Context(), userID, req.CurrentPassword, req.NewPassword); err != nil {
+		code := http.StatusInternalServerError
+		if err == ErrInvalidCredentials {
+			code = http.StatusUnauthorized
+		}
+		respondError(w, code, err.Error())
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) DeleteAccount(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value(CtxUserID).(string)
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "not authenticated")
+		return
+	}
+
+	var req struct {
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if err := h.svc.DeleteAccount(r.Context(), userID, req.Password); err != nil {
+		code := http.StatusInternalServerError
+		if err == ErrInvalidCredentials {
+			code = http.StatusUnauthorized
+		}
+		respondError(w, code, err.Error())
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func respond(w http.ResponseWriter, status int, data interface{}) {
