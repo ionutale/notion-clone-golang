@@ -33,7 +33,7 @@ import (
 	ws "github.com/ionutale/notion-clone-golang/internal/workspace"
 )
 
-//go:embed web/build
+//go:embed all:web/build
 var spaFS embed.FS
 
 //go:embed migrations/*.sql
