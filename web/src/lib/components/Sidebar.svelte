@@ -39,7 +39,10 @@
 
   $effect(() => {
     loadPages();
+    blockStore.loadFavorites();
   });
+
+  let favoritePages = $derived(pages.filter(p => blockStore.favoriteIds.has(p.id)));
 
   async function createPage() {
     const page = await blockStore.createPage();
@@ -253,6 +256,42 @@
     </button>
   </div>
 
+  {#if favoritePages.length > 0}
+    <div class="px-2 pt-2 pb-1">
+      <p class="text-xs font-medium text-base-content/40 uppercase tracking-wider px-3">Favorites</p>
+    </div>
+    <ul class="menu menu-sm p-1">
+      {#each favoritePages as p (p.id)}
+        <li>
+          <div class="flex items-center gap-2 rounded-lg" class:active={p.id === activeId}>
+            <a href="/pages/{p.id}" class="flex-1 truncate flex items-center gap-1.5">
+              {#if p.icon_type === 'image'}
+                <img src={p.icon} alt="" class="w-4 h-4 rounded object-cover shrink-0" />
+              {:else if p.icon}
+                <span class="text-sm shrink-0">{p.icon}</span>
+              {:else}
+                <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              {/if}
+              {p.title}
+            </a>
+            <button
+              onclick={async () => { await blockStore.toggleFavorite(p.id); }}
+              class="btn btn-ghost btn-xs px-1 text-warning"
+              title="Unfavorite"
+            >
+              <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+              </svg>
+            </button>
+          </div>
+        </li>
+      {/each}
+    </ul>
+    <div class="divider my-1"></div>
+  {/if}
+
   <div class="p-2">
     <input
       type="text"
@@ -336,6 +375,16 @@
                   {p.title}
                 </a>
               {/if}
+              <button
+                onclick={async () => { await blockStore.toggleFavorite(p.id); }}
+                class="btn btn-ghost btn-xs px-1 opacity-0 group-hover:opacity-100 hover:opacity-100"
+                class:text-warning={blockStore.favoriteIds.has(p.id)}
+                title={blockStore.favoriteIds.has(p.id) ? 'Unfavorite' : 'Favorite'}
+              >
+                <svg class="w-3.5 h-3.5" fill={blockStore.favoriteIds.has(p.id) ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                </svg>
+              </button>
               <button
                 onclick={(e) => deletePage(e, p.id)}
                 class="btn btn-ghost btn-xs px-1 opacity-0 group-hover:opacity-100 hover:opacity-100"

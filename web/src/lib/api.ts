@@ -67,6 +67,10 @@ class ApiClient {
     return this.request('PATCH', `/blocks/${id}/restore`);
   }
 
+  listFavorites(): Promise<PageSummary[]> {
+    return this.request('GET', '/favorites');
+  }
+
   moveBlock(id: string, parentId: string | null, position: number): Promise<Block> {
     return this.request('PATCH', `/blocks/${id}/move`, { parent_id: parentId, position });
   }

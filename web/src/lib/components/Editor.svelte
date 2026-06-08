@@ -30,6 +30,7 @@
   $effect(() => {
     if (pageId) {
       blockStore.loadPage(pageId);
+      blockStore.loadFavorites();
       showIconPicker = false;
       focusBlockId = null;
     }
@@ -161,6 +162,16 @@
       <h1 class="text-4xl font-bold text-base-content outline-none flex-1 min-w-0">
         {blockStore.pageTitle}
       </h1>
+      <button
+        onclick={async () => await blockStore.toggleFavorite(pageId)}
+        class="btn btn-ghost btn-sm px-2 shrink-0"
+        class:text-warning={blockStore.favoriteIds.has(pageId)}
+        title={blockStore.favoriteIds.has(pageId) ? 'Remove from favorites' : 'Add to favorites'}
+      >
+        <svg class="w-5 h-5" fill={blockStore.favoriteIds.has(pageId) ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+        </svg>
+      </button>
     </div>
 
     <FormatToolbar />

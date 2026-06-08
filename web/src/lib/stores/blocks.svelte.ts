@@ -12,6 +12,7 @@ class BlockStore {
   pageCoverColor = $derived(this.blocks.get(this.pageId ?? '')?.content?.cover_color ?? '#e5e7eb');
   loading = $state(false);
   error = $state<string | null>(null);
+  favoriteIds = $state<Set<string>>(new Set());
 
   childrenMap = $derived.by(() => {
     const map = new Map<string | null, string[]>();
@@ -116,6 +117,24 @@ class BlockStore {
 
   listPages() {
     return api.listPages();
+  }
+
+  async loadFavorites() {
+    const pages = await api.listFavorites();
+    this.favoriteIds = new Set(pages.map(p => p.id));
+  }
+
+  async toggleFavorite(blockId: string) {
+    const block = this.blocks.get(blockId);
+    if (!block) return;
+    const currentlyFavorited = this.favoriteIds.has(blockId);
+    const content = { ...block.content, favorited: !currentlyFavorited };
+    if (currentlyFavorited) {
+      this.favoriteIds = new Set([...this.favoriteIds].filter(id => id !== blockId));
+    } else {
+      this.favoriteIds = new Set([...this.favoriteIds, blockId]);
+    }
+    await this.updateBlock(blockId, { content });
   }
 
   clear() {
