@@ -126,15 +126,18 @@ class BlockStore {
 
   async toggleFavorite(blockId: string) {
     const block = this.blocks.get(blockId);
-    if (!block) return;
     const currentlyFavorited = this.favoriteIds.has(blockId);
-    const content = { ...block.content, favorited: !currentlyFavorited };
+    // Optimistic update
     if (currentlyFavorited) {
       this.favoriteIds = new Set([...this.favoriteIds].filter(id => id !== blockId));
     } else {
       this.favoriteIds = new Set([...this.favoriteIds, blockId]);
     }
-    await this.updateBlock(blockId, { content });
+    if (block) {
+      await this.updateBlock(blockId, { content: { ...block.content, favorited: !currentlyFavorited } });
+    } else {
+      await api.toggleFavorite(blockId, !currentlyFavorited);
+    }
   }
 
   clear() {

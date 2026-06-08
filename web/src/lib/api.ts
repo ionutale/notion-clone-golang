@@ -71,6 +71,10 @@ class ApiClient {
     return this.request('GET', '/favorites');
   }
 
+  async toggleFavorite(id: string, favorited: boolean): Promise<Block> {
+    return this.request('PATCH', `/blocks/${id}`, { content: { favorited } });
+  }
+
   moveBlock(id: string, parentId: string | null, position: number): Promise<Block> {
     return this.request('PATCH', `/blocks/${id}/move`, { parent_id: parentId, position });
   }
