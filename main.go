@@ -24,11 +24,13 @@ import (
 	"github.com/joho/godotenv"
 
 	"github.com/ionutale/notion-clone-golang/internal"
+	"github.com/ionutale/notion-clone-golang/internal/auth"
 	"github.com/ionutale/notion-clone-golang/internal/block"
 	"github.com/ionutale/notion-clone-golang/internal/config"
 	"github.com/ionutale/notion-clone-golang/internal/db"
 	"github.com/ionutale/notion-clone-golang/internal/middleware"
 	"github.com/ionutale/notion-clone-golang/internal/storage"
+	ws "github.com/ionutale/notion-clone-golang/internal/workspace"
 )
 
 //go:embed web/build
@@ -100,6 +102,14 @@ func runMigrations(pool *pgxpool.Pool) error {
 	return nil
 }
 
+type wsCreatorAdapter struct {
+	svc *ws.Service
+}
+
+func (a *wsCreatorAdapter) Create(ctx context.Context, name, ownerID string) (interface{}, error) {
+	return a.svc.Create(ctx, name, ownerID)
+}
+
 func main() {
 	godotenv.Load()
 
@@ -127,8 +137,14 @@ func main() {
 	}
 
 	var blockSvc *block.Service
+	var authSvc *auth.Service
+	var wsSvc *ws.Service
 	if pool != nil {
-		blockSvc = block.NewService(pool, DefaultWorkspaceID, DefaultUserID)
+		blockSvc = block.NewService(pool)
+		wsRepo := ws.NewRepository(pool)
+		wsSvc = ws.NewService(wsRepo)
+		authRepo := auth.NewRepository(pool)
+		authSvc = auth.NewService(authRepo, &wsCreatorAdapter{svc: wsSvc})
 	}
 
 	var fileStore storage.FileStore
@@ -153,7 +169,7 @@ func main() {
 	}))
 
 	if blockSvc != nil {
-		internal.MountAPI(r, blockSvc, fileStore)
+		internal.MountAPI(r, blockSvc, fileStore, authSvc, wsSvc)
 	} else {
 		r.Route("/api/v1", func(r chi.Router) {
 			r.Get("/health", func(w http.ResponseWriter, r *http.Request) {

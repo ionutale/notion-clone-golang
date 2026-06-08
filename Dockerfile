@@ -1,5 +1,6 @@
 FROM node:22-alpine AS frontend-builder
 WORKDIR /app
+ENV CI=true
 RUN npm install -g pnpm
 COPY web/package.json web/pnpm-lock.yaml ./
 RUN pnpm install

@@ -10,26 +10,22 @@ import (
 )
 
 type Service struct {
-	repo        *Repository
-	defaultWorkspaceID uuid.UUID
-	defaultUserID      uuid.UUID
+	repo *Repository
 }
 
-func NewService(pool *pgxpool.Pool, workspaceID, userID uuid.UUID) *Service {
+func NewService(pool *pgxpool.Pool) *Service {
 	return &Service{
-		repo:               NewRepository(pool),
-		defaultWorkspaceID: workspaceID,
-		defaultUserID:      userID,
+		repo: NewRepository(pool),
 	}
 }
 
-func (s *Service) CreatePage(ctx context.Context, title string) (Block, error) {
+func (s *Service) CreatePage(ctx context.Context, workspaceID, userID uuid.UUID, title string) (Block, error) {
 	content, _ := json.Marshal(map[string]string{"title": title})
 	block := Block{
-		WorkspaceID: s.defaultWorkspaceID,
+		WorkspaceID: workspaceID,
 		Type:        TypePage,
 		Content:     content,
-		CreatedBy:   &s.defaultUserID,
+		CreatedBy:   &userID,
 	}
 	if err := s.repo.Create(ctx, &block); err != nil {
 		return Block{}, fmt.Errorf("create page: %w", err)
@@ -52,11 +48,11 @@ func (s *Service) GetPageTree(ctx context.Context, pageID uuid.UUID) (PageTree, 
 	return PageTree{Page: page, Blocks: blocks}, nil
 }
 
-func (s *Service) ListPages(ctx context.Context) ([]PageSummary, error) {
-	return s.repo.ListPages(ctx, s.defaultWorkspaceID)
+func (s *Service) ListPages(ctx context.Context, workspaceID uuid.UUID) ([]PageSummary, error) {
+	return s.repo.ListPages(ctx, workspaceID)
 }
 
-func (s *Service) CreateBlock(ctx context.Context, req CreateBlockRequest) (Block, error) {
+func (s *Service) CreateBlock(ctx context.Context, workspaceID, userID uuid.UUID, req CreateBlockRequest) (Block, error) {
 	if !ValidTypes[req.Type] {
 		return Block{}, fmt.Errorf("invalid block type: %s", req.Type)
 	}
@@ -70,7 +66,7 @@ func (s *Service) CreateBlock(ctx context.Context, req CreateBlockRequest) (Bloc
 	var position int64
 
 	if parentID != nil {
-		siblings, err := s.repo.GetSiblings(ctx, parentID, s.defaultWorkspaceID)
+		siblings, err := s.repo.GetSiblings(ctx, parentID, workspaceID)
 		if err == nil && len(siblings) > 0 {
 			last := siblings[len(siblings)-1]
 			after := last.Position + (1 << 31)
@@ -87,12 +83,12 @@ func (s *Service) CreateBlock(ctx context.Context, req CreateBlockRequest) (Bloc
 	}
 
 	block := Block{
-		WorkspaceID: s.defaultWorkspaceID,
+		WorkspaceID: workspaceID,
 		ParentID:    parentID,
 		Type:        req.Type,
 		Content:     content,
 		Position:    position,
-		CreatedBy:   &s.defaultUserID,
+		CreatedBy:   &userID,
 	}
 	if err := s.repo.Create(ctx, &block); err != nil {
 		return Block{}, fmt.Errorf("create block: %w", err)
@@ -119,8 +115,8 @@ func (s *Service) RestoreBlock(ctx context.Context, id uuid.UUID) (Block, error)
 	return s.repo.Restore(ctx, id)
 }
 
-func (s *Service) MoveBlock(ctx context.Context, id uuid.UUID, req MoveBlockRequest) (Block, error) {
-	siblings, err := s.repo.GetSiblings(ctx, req.ParentID, s.defaultWorkspaceID)
+func (s *Service) MoveBlock(ctx context.Context, workspaceID uuid.UUID, id uuid.UUID, req MoveBlockRequest) (Block, error) {
+	siblings, err := s.repo.GetSiblings(ctx, req.ParentID, workspaceID)
 	if err != nil {
 		return Block{}, fmt.Errorf("get siblings: %w", err)
 	}
@@ -147,24 +143,24 @@ func (s *Service) MoveBlock(ctx context.Context, id uuid.UUID, req MoveBlockRequ
 	return s.repo.Move(ctx, id, moveReq)
 }
 
-func (s *Service) Search(ctx context.Context, query string, limit, offset int) ([]SearchResult, error) {
-	return s.repo.Search(ctx, s.defaultWorkspaceID, query, limit, offset)
+func (s *Service) Search(ctx context.Context, workspaceID uuid.UUID, query string, limit, offset int) ([]SearchResult, error) {
+	return s.repo.Search(ctx, workspaceID, query, limit, offset)
 }
 
-func (s *Service) ListFavorites(ctx context.Context) ([]PageSummary, error) {
-	return s.repo.ListFavorites(ctx, s.defaultWorkspaceID)
+func (s *Service) ListFavorites(ctx context.Context, workspaceID uuid.UUID) ([]PageSummary, error) {
+	return s.repo.ListFavorites(ctx, workspaceID)
 }
 
-func (s *Service) ListTrash(ctx context.Context) ([]PageSummary, error) {
-	_ = s.repo.CleanupExpired(ctx, s.defaultWorkspaceID, 30)
-	return s.repo.ListTrash(ctx, s.defaultWorkspaceID)
+func (s *Service) ListTrash(ctx context.Context, workspaceID uuid.UUID) ([]PageSummary, error) {
+	_ = s.repo.CleanupExpired(ctx, workspaceID, 30)
+	return s.repo.ListTrash(ctx, workspaceID)
 }
 
 func (s *Service) PermanentDelete(ctx context.Context, id uuid.UUID) error {
 	return s.repo.PermanentDelete(ctx, id)
 }
 
-func (s *Service) SplitBlock(ctx context.Context, id uuid.UUID, splitPosition int) (Block, Block, error) {
+func (s *Service) SplitBlock(ctx context.Context, workspaceID, userID uuid.UUID, id uuid.UUID, splitPosition int) (Block, Block, error) {
 	original, err := s.repo.GetByID(ctx, id)
 	if err != nil {
 		return Block{}, Block{}, fmt.Errorf("get block: %w", err)
@@ -195,11 +191,11 @@ func (s *Service) SplitBlock(ctx context.Context, id uuid.UUID, splitPosition in
 	}
 
 	newBlock := Block{
-		WorkspaceID: s.defaultWorkspaceID,
+		WorkspaceID: workspaceID,
 		ParentID:    original.ParentID,
 		Type:        original.Type,
 		Content:     rightContent,
-		CreatedBy:   &s.defaultUserID,
+		CreatedBy:   &userID,
 	}
 	if err := s.repo.Create(ctx, &newBlock); err != nil {
 		return Block{}, Block{}, fmt.Errorf("create new block: %w", err)

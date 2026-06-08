@@ -7,6 +7,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+
+	"github.com/ionutale/notion-clone-golang/internal/auth"
 )
 
 type Handler struct {
@@ -29,6 +31,19 @@ func respondError(w http.ResponseWriter, status int, msg string) {
 	respond(w, status, map[string]string{"error": msg})
 }
 
+func workspaceIDFromRequest(r *http.Request) uuid.UUID {
+	id := chi.URLParam(r, "workspaceId")
+	return uuid.MustParse(id)
+}
+
+func userIDFromRequest(r *http.Request) uuid.UUID {
+	id, ok := r.Context().Value(auth.CtxUserID).(string)
+	if !ok {
+		return uuid.Nil
+	}
+	return uuid.MustParse(id)
+}
+
 func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Title string `json:"title"`
@@ -40,7 +55,7 @@ func (h *Handler) CreatePage(w http.ResponseWriter, r *http.Request) {
 	if req.Title == "" {
 		req.Title = "Untitled"
 	}
-	page, err := h.svc.CreatePage(r.Context(), req.Title)
+	page, err := h.svc.CreatePage(r.Context(), workspaceIDFromRequest(r), userIDFromRequest(r), req.Title)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -63,7 +78,7 @@ func (h *Handler) GetPageTree(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) ListPages(w http.ResponseWriter, r *http.Request) {
-	pages, err := h.svc.ListPages(r.Context())
+	pages, err := h.svc.ListPages(r.Context(), workspaceIDFromRequest(r))
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -77,7 +92,7 @@ func (h *Handler) CreateBlock(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	block, err := h.svc.CreateBlock(r.Context(), req)
+	block, err := h.svc.CreateBlock(r.Context(), workspaceIDFromRequest(r), userIDFromRequest(r), req)
 	if err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
@@ -142,7 +157,7 @@ func (h *Handler) MoveBlock(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	block, err := h.svc.MoveBlock(r.Context(), id, req)
+	block, err := h.svc.MoveBlock(r.Context(), workspaceIDFromRequest(r), id, req)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -165,7 +180,7 @@ func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
 		offset = 0
 	}
 
-	results, err := h.svc.Search(r.Context(), query, limit, offset)
+	results, err := h.svc.Search(r.Context(), workspaceIDFromRequest(r), query, limit, offset)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -174,7 +189,7 @@ func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) ListFavorites(w http.ResponseWriter, r *http.Request) {
-	pages, err := h.svc.ListFavorites(r.Context())
+	pages, err := h.svc.ListFavorites(r.Context(), workspaceIDFromRequest(r))
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -183,7 +198,7 @@ func (h *Handler) ListFavorites(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) ListTrash(w http.ResponseWriter, r *http.Request) {
-	pages, err := h.svc.ListTrash(r.Context())
+	pages, err := h.svc.ListTrash(r.Context(), workspaceIDFromRequest(r))
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return

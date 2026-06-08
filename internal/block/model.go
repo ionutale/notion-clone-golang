@@ -60,13 +60,13 @@ type MoveBlockRequest struct {
 }
 
 type PageSummary struct {
-	ID        uuid.UUID `json:"id"`
-	Title     string    `json:"title"`
-	Icon      string    `json:"icon,omitempty"`
-	IconType  string    `json:"icon_type,omitempty"`
-	Position  int64     `json:"position"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID        uuid.UUID  `json:"id"`
+	Title     string     `json:"title"`
+	Icon      *string    `json:"icon,omitempty"`
+	IconType  *string    `json:"icon_type,omitempty"`
+	Position  int64      `json:"position"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
 }
 
 type PageTree struct {
