@@ -38,6 +38,9 @@ func MountAPI(
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.AuthMiddleware(authSvc))
 
+			// Auth routes (logout, me, settings)
+			authH.RegisterProtectedRoutes(r)
+
 			// Workspace routes (list, create, etc.)
 			wsH.RegisterRoutes(r)
 

@@ -22,6 +22,9 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Post("/auth/signup", h.Signup)
 	r.Post("/auth/login", h.Login)
 	r.Post("/auth/refresh", h.Refresh)
+}
+
+func (h *Handler) RegisterProtectedRoutes(r chi.Router) {
 	r.Post("/auth/logout", h.Logout)
 	r.Get("/auth/me", h.Me)
 	r.Patch("/auth/me", h.UpdateProfile)
