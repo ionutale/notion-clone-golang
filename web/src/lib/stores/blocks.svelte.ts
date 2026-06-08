@@ -7,6 +7,9 @@ class BlockStore {
   pageTitle = $state<string>('');
   pageIcon = $derived(this.blocks.get(this.pageId ?? '')?.content?.icon ?? null);
   pageIconType = $derived(this.blocks.get(this.pageId ?? '')?.content?.icon_type ?? null);
+  pageCover = $derived(this.blocks.get(this.pageId ?? '')?.content?.cover ?? null);
+  pageCoverType = $derived(this.blocks.get(this.pageId ?? '')?.content?.cover_type ?? 'color');
+  pageCoverColor = $derived(this.blocks.get(this.pageId ?? '')?.content?.cover_color ?? '#e5e7eb');
   loading = $state(false);
   error = $state<string | null>(null);
 
@@ -64,15 +67,28 @@ class BlockStore {
     return updated;
   }
 
-  async updateIcon(icon: string | null, iconType: string | null) {
+  async updateCover(cover: string | null, coverType: string, coverColor?: string): Promise<Block | undefined> {
     const block = this.blocks.get(this.pageId ?? '');
     if (!block) return;
+    const content = { ...block.content, cover, cover_type: coverType };
+    if (coverColor) content.cover_color = coverColor;
+    if (cover === null) {
+      delete content.cover;
+      delete content.cover_type;
+      delete content.cover_color;
+    }
+    return this.updateBlock(this.pageId!, { content });
+  }
+
+  async updateIcon(icon: string | null, iconType: string | null): Promise<Block> {
+    const block = this.blocks.get(this.pageId ?? '');
+    if (!block) throw new Error('Page block not found');
     const content = { ...block.content, icon, icon_type: iconType };
     if (icon === null) {
       delete content.icon;
       delete content.icon_type;
     }
-    await this.updateBlock(this.pageId!, { content });
+    return this.updateBlock(this.pageId!, { content });
   }
 
   async deleteBlock(id: string): Promise<Block> {

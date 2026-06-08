@@ -5,16 +5,22 @@
   import SlashMenu from './SlashMenu.svelte';
   import UndoToast from './UndoToast.svelte';
   import IconPopover from './IconPopover.svelte';
+  import CoverPopover from './CoverPopover.svelte';
 
   let { pageId } = $props<{ pageId: string }>();
 
   let showIconPicker = $state(false);
+  let showCoverPicker = $state(false);
 
   let iconPickerContainer: HTMLDivElement | undefined = $state();
+  let coverPickerContainer: HTMLDivElement | undefined = $state();
 
   function handleIconPickerOutsideClick(e: MouseEvent) {
     if (showIconPicker && iconPickerContainer && !iconPickerContainer.contains(e.target as Node)) {
       showIconPicker = false;
+    }
+    if (showCoverPicker && coverPickerContainer && !coverPickerContainer.contains(e.target as Node)) {
+      showCoverPicker = false;
     }
   }
 
@@ -61,7 +67,7 @@
 
 <svelte:window onkeydown={handlePageKeydown} onclick={handleIconPickerOutsideClick} />
 
-<div class="max-w-3xl mx-auto py-8 px-4">
+<div class="max-w-3xl mx-auto py-8 px-4 group">
   {#if blockStore.loading}
     <div class="flex justify-center py-20">
       <span class="loading loading-spinner loading-lg text-primary"></span>
@@ -74,6 +80,49 @@
       <span>{blockStore.error}</span>
     </div>
   {:else}
+    {#if blockStore.pageCover}
+      <div class="relative mb-4 -mx-4 -mt-8" style="height: 200px;">
+        {#if blockStore.pageCoverType === 'image'}
+          <img src={blockStore.pageCover} alt="Cover" class="w-full h-full object-cover rounded-t-xl" />
+        {:else}
+          <div class="w-full h-full rounded-t-xl" style="background-color: {blockStore.pageCoverColor}"></div>
+        {/if}
+        <button
+          onclick={() => showCoverPicker = !showCoverPicker}
+          class="absolute top-2 right-2 btn btn-ghost btn-xs bg-base-100/80 hover:bg-base-100 opacity-0 group-hover:opacity-100 transition-opacity"
+        >
+          Change cover
+        </button>
+      </div>
+    {:else}
+      <button
+        onclick={() => showCoverPicker = !showCoverPicker}
+        class="w-full h-12 mb-4 -mx-4 -mt-8 flex items-center justify-center text-sm text-base-content/30 hover:text-base-content/50 hover:bg-base-200/50 transition-colors rounded-t-xl"
+      >
+        Add cover
+      </button>
+    {/if}
+
+    {#if showCoverPicker}
+      <div bind:this={coverPickerContainer} class="relative">
+        <CoverPopover
+          onselect={async (detail) => {
+            if (detail.type === 'color') {
+              await blockStore.updateCover(detail.value, 'color', detail.value);
+            } else {
+              await blockStore.updateCover(detail.value, 'image');
+            }
+            showCoverPicker = false;
+          }}
+          onremove={async () => {
+            await blockStore.updateCover(null, 'color');
+            showCoverPicker = false;
+          }}
+          onclose={() => showCoverPicker = false}
+        />
+      </div>
+    {/if}
+
     <div bind:this={iconPickerContainer} class="flex items-start gap-4 mb-8">
       <div class="relative">
         {#if blockStore.pageIcon}
