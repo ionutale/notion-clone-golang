@@ -19,6 +19,7 @@ type WorkspaceRepository interface {
 	IsMember(ctx context.Context, workspaceID, userID string) (bool, error)
 	AddMember(ctx context.Context, workspaceID, userID, role string) error
 	RemoveMember(ctx context.Context, workspaceID, userID string) error
+	ListMembers(ctx context.Context, workspaceID string) ([]MemberWithUser, error)
 }
 
 type Service struct {
@@ -76,6 +77,10 @@ func (s *Service) InviteMember(ctx context.Context, workspaceID, memberID, role,
 		return ErrNotOwner
 	}
 	return s.repo.AddMember(ctx, workspaceID, memberID, role)
+}
+
+func (s *Service) ListMembers(ctx context.Context, workspaceID string) ([]MemberWithUser, error) {
+	return s.repo.ListMembers(ctx, workspaceID)
 }
 
 func (s *Service) RemoveMember(ctx context.Context, workspaceID, memberID, requesterID string) error {

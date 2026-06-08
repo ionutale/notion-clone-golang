@@ -111,6 +111,10 @@ func (s *Service) ValidateToken(tokenString string) (string, error) {
 	return claims.UserID, nil
 }
 
+func (s *Service) GetUserByEmail(ctx context.Context, email string) (*User, error) {
+	return s.repo.GetUserByEmail(ctx, email)
+}
+
 func (s *Service) GetUser(ctx context.Context, userID string) (*User, error) {
 	return s.repo.GetUserByID(ctx, userID)
 }

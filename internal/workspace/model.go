@@ -21,5 +21,14 @@ type CreateRequest struct {
 
 type InviteRequest struct {
 	UserID string `json:"user_id"`
+	Email  string `json:"email"`
 	Role   string `json:"role"`
+}
+
+type MemberWithUser struct {
+	UserID   string `json:"user_id"`
+	Email    string `json:"email"`
+	Name     string `json:"name"`
+	Role     string `json:"role"`
+	JoinedAt string `json:"joined_at"`
 }

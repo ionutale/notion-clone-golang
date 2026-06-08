@@ -6,14 +6,15 @@ import (
 )
 
 type MockWorkspaceRepo struct {
-	CreateFn     func(ctx context.Context, name, ownerID string) (*Workspace, error)
-	ListByUserFn func(ctx context.Context, userID string) ([]Workspace, error)
-	GetByIDFn    func(ctx context.Context, id string) (*Workspace, error)
-	UpdateFn     func(ctx context.Context, id, name string) error
-	DeleteFn     func(ctx context.Context, id string) error
-	IsMemberFn   func(ctx context.Context, workspaceID, userID string) (bool, error)
-	AddMemberFn  func(ctx context.Context, workspaceID, userID, role string) error
+	CreateFn       func(ctx context.Context, name, ownerID string) (*Workspace, error)
+	ListByUserFn   func(ctx context.Context, userID string) ([]Workspace, error)
+	GetByIDFn      func(ctx context.Context, id string) (*Workspace, error)
+	UpdateFn       func(ctx context.Context, id, name string) error
+	DeleteFn       func(ctx context.Context, id string) error
+	IsMemberFn     func(ctx context.Context, workspaceID, userID string) (bool, error)
+	AddMemberFn    func(ctx context.Context, workspaceID, userID, role string) error
 	RemoveMemberFn func(ctx context.Context, workspaceID, userID string) error
+	ListMembersFn  func(ctx context.Context, workspaceID string) ([]MemberWithUser, error)
 }
 
 func (m *MockWorkspaceRepo) Create(ctx context.Context, name, ownerID string) (*Workspace, error) {
@@ -63,6 +64,13 @@ func (m *MockWorkspaceRepo) AddMember(ctx context.Context, workspaceID, userID, 
 		return m.AddMemberFn(ctx, workspaceID, userID, role)
 	}
 	return nil
+}
+
+func (m *MockWorkspaceRepo) ListMembers(ctx context.Context, workspaceID string) ([]MemberWithUser, error) {
+	if m.ListMembersFn != nil {
+		return m.ListMembersFn(ctx, workspaceID)
+	}
+	return []MemberWithUser{}, nil
 }
 
 func (m *MockWorkspaceRepo) RemoveMember(ctx context.Context, workspaceID, userID string) error {

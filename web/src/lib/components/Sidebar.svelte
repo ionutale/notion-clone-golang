@@ -4,7 +4,46 @@
   import { authStore } from '$lib/stores/auth.svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
+  import { api } from '$lib/api';
   import type { PageSummary } from '$lib/types';
+
+  interface Member {
+    user_id: string;
+    email: string;
+    name: string | null;
+    role: string;
+    joined_at: string;
+  }
+
+  let inviteEmail = $state('');
+  let inviting = $state(false);
+  let workspaceMembers = $state<Member[]>([]);
+
+  async function loadMembers() {
+    if (!workspaceStore.activeWorkspaceId) return;
+    try {
+      workspaceMembers = await api.request('GET', `/workspaces/${workspaceStore.activeWorkspaceId}/members`);
+    } catch {
+      workspaceMembers = [];
+    }
+  }
+
+  async function handleInvite() {
+    if (!inviteEmail.trim() || !workspaceStore.activeWorkspaceId) return;
+    inviting = true;
+    try {
+      await api.request('POST', `/workspaces/${workspaceStore.activeWorkspaceId}/members`, {
+        email: inviteEmail.trim(),
+        role: 'member',
+      });
+      inviteEmail = '';
+      await loadMembers();
+    } catch (err: any) {
+      alert(err.message ?? 'Failed to invite');
+    } finally {
+      inviting = false;
+    }
+  }
 
   let pages = $state<PageSummary[]>([]);
   let loading = $state(true);
@@ -40,6 +79,12 @@
   $effect(() => {
     loadPages();
     blockStore.loadFavorites();
+  });
+
+  $effect(() => {
+    if (workspaceStore.activeWorkspaceId) {
+      loadMembers();
+    }
   });
 
   let favoritePages = $derived(pages.filter(p => blockStore.favoriteIds.has(p.id)));
@@ -245,6 +290,35 @@
           >
             + New workspace
           </button>
+          <hr class="border-base-200 my-1">
+          <div class="px-3 py-2">
+            <p class="text-xs font-medium text-base-content/40 uppercase mb-2">Members</p>
+            {#if workspaceMembers.length > 0}
+              {#each workspaceMembers as m}
+                <div class="flex items-center justify-between py-1">
+                  <span class="text-sm truncate">{m.name || m.email}</span>
+                  <span class="text-xs text-base-content/40 shrink-0">{m.role}</span>
+                </div>
+              {/each}
+            {:else}
+              <p class="text-xs text-base-content/30">No members yet</p>
+            {/if}
+            <div class="flex gap-2 mt-2">
+              <input
+                bind:value={inviteEmail}
+                type="email"
+                placeholder="Email to invite"
+                class="input input-ghost input-xs flex-1 min-w-0"
+              />
+              <button
+                onclick={handleInvite}
+                class="btn btn-primary btn-xs"
+                disabled={!inviteEmail.trim() || inviting}
+              >
+                {inviting ? '...' : 'Invite'}
+              </button>
+            </div>
+          </div>
         </div>
       {/if}
     </div>

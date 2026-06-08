@@ -114,6 +114,30 @@ func (r *Repository) AddMember(ctx context.Context, workspaceID, userID, role st
 	return err
 }
 
+func (r *Repository) ListMembers(ctx context.Context, workspaceID string) ([]MemberWithUser, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT wm.user_id, u.email, u.name, wm.role, wm.joined_at
+		 FROM workspace_members wm
+		 JOIN users u ON wm.user_id = u.id
+		 WHERE wm.workspace_id = $1
+		 ORDER BY wm.joined_at ASC`,
+		workspaceID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var members []MemberWithUser
+	for rows.Next() {
+		var m MemberWithUser
+		if err := rows.Scan(&m.UserID, &m.Email, &m.Name, &m.Role, &m.JoinedAt); err != nil {
+			return nil, err
+		}
+		members = append(members, m)
+	}
+	return members, rows.Err()
+}
+
 func (r *Repository) RemoveMember(ctx context.Context, workspaceID, userID string) error {
 	_, err := r.pool.Exec(ctx,
 		`DELETE FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,

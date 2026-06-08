@@ -33,7 +33,7 @@ func TestCreate_Success(t *testing.T) {
 		},
 	}
 	svc := NewService(mockRepo)
-	h := NewHandler(svc)
+	h := NewHandler(svc, nil)
 
 	body := CreateRequest{Name: "My Workspace"}
 	bodyBytes, _ := json.Marshal(body)
@@ -58,7 +58,7 @@ func TestCreate_DefaultName(t *testing.T) {
 		},
 	}
 	svc := NewService(mockRepo)
-	h := NewHandler(svc)
+	h := NewHandler(svc, nil)
 
 	body := CreateRequest{}
 	bodyBytes, _ := json.Marshal(body)
@@ -81,7 +81,7 @@ func TestList_Empty(t *testing.T) {
 		},
 	}
 	svc := NewService(mockRepo)
-	h := NewHandler(svc)
+	h := NewHandler(svc, nil)
 
 	req := httptest.NewRequest("GET", "/workspaces", nil)
 	req = req.WithContext(userContext("user-1"))
@@ -107,7 +107,7 @@ func TestList_Multiple(t *testing.T) {
 		},
 	}
 	svc := NewService(mockRepo)
-	h := NewHandler(svc)
+	h := NewHandler(svc, nil)
 
 	req := httptest.NewRequest("GET", "/workspaces", nil)
 	req = req.WithContext(userContext("user-1"))
@@ -131,7 +131,7 @@ func TestGet_Success(t *testing.T) {
 		},
 	}
 	svc := NewService(mockRepo)
-	h := NewHandler(svc)
+	h := NewHandler(svc, nil)
 	router := newRouter(h)
 
 	req := httptest.NewRequest("GET", "/workspaces/ws-1", nil)
@@ -154,7 +154,7 @@ func TestGet_NotFound(t *testing.T) {
 		},
 	}
 	svc := NewService(mockRepo)
-	h := NewHandler(svc)
+	h := NewHandler(svc, nil)
 	router := newRouter(h)
 
 	req := httptest.NewRequest("GET", "/workspaces/ws-nonexistent", nil)
@@ -176,7 +176,7 @@ func TestUpdate_Success(t *testing.T) {
 		},
 	}
 	svc := NewService(mockRepo)
-	h := NewHandler(svc)
+	h := NewHandler(svc, nil)
 	router := newRouter(h)
 
 	body := CreateRequest{Name: "New Name"}
@@ -197,7 +197,7 @@ func TestUpdate_NotOwner(t *testing.T) {
 		},
 	}
 	svc := NewService(mockRepo)
-	h := NewHandler(svc)
+	h := NewHandler(svc, nil)
 	router := newRouter(h)
 
 	body := CreateRequest{Name: "New Name"}
@@ -221,7 +221,7 @@ func TestDelete_Success(t *testing.T) {
 		},
 	}
 	svc := NewService(mockRepo)
-	h := NewHandler(svc)
+	h := NewHandler(svc, nil)
 	router := newRouter(h)
 
 	req := httptest.NewRequest("DELETE", "/workspaces/ws-1", nil)
@@ -240,7 +240,7 @@ func TestDelete_NotOwner(t *testing.T) {
 		},
 	}
 	svc := NewService(mockRepo)
-	h := NewHandler(svc)
+	h := NewHandler(svc, nil)
 	router := newRouter(h)
 
 	req := httptest.NewRequest("DELETE", "/workspaces/ws-1", nil)
@@ -262,7 +262,7 @@ func TestInviteMember_Success(t *testing.T) {
 		},
 	}
 	svc := NewService(mockRepo)
-	h := NewHandler(svc)
+	h := NewHandler(svc, nil)
 	router := newRouter(h)
 
 	body := InviteRequest{UserID: "user-2", Role: "member"}
@@ -283,7 +283,7 @@ func TestInviteMember_NotOwner(t *testing.T) {
 		},
 	}
 	svc := NewService(mockRepo)
-	h := NewHandler(svc)
+	h := NewHandler(svc, nil)
 	router := newRouter(h)
 
 	body := InviteRequest{UserID: "user-2", Role: "member"}
@@ -307,7 +307,7 @@ func TestRemoveMember_Success(t *testing.T) {
 		},
 	}
 	svc := NewService(mockRepo)
-	h := NewHandler(svc)
+	h := NewHandler(svc, nil)
 	router := newRouter(h)
 
 	req := httptest.NewRequest("DELETE", "/workspaces/ws-1/members/user-2", nil)
@@ -326,7 +326,7 @@ func TestRemoveMember_NotOwner(t *testing.T) {
 		},
 	}
 	svc := NewService(mockRepo)
-	h := NewHandler(svc)
+	h := NewHandler(svc, nil)
 	router := newRouter(h)
 
 	req := httptest.NewRequest("DELETE", "/workspaces/ws-1/members/user-2", nil)

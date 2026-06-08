@@ -10,11 +10,12 @@ import (
 )
 
 type Handler struct {
-	svc *Service
+	svc     *Service
+	authSvc *auth.Service
 }
 
-func NewHandler(svc *Service) *Handler {
-	return &Handler{svc: svc}
+func NewHandler(svc *Service, authSvc *auth.Service) *Handler {
+	return &Handler{svc: svc, authSvc: authSvc}
 }
 
 func respond(w http.ResponseWriter, status int, data interface{}) {
@@ -35,6 +36,7 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Get("/workspaces/{workspaceId}", h.Get)
 	r.Patch("/workspaces/{workspaceId}", h.Update)
 	r.Delete("/workspaces/{workspaceId}", h.Delete)
+	r.Get("/workspaces/{workspaceId}/members", h.ListMembers)
 	r.Post("/workspaces/{workspaceId}/members", h.InviteMember)
 	r.Delete("/workspaces/{workspaceId}/members/{userId}", h.RemoveMember)
 }
@@ -110,11 +112,36 @@ func (h *Handler) InviteMember(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if err := h.svc.InviteMember(r.Context(), id, req.UserID, req.Role, userID); err != nil {
+
+	memberID := req.UserID
+	if memberID == "" && req.Email != "" {
+		user, err := h.authSvc.GetUserByEmail(r.Context(), req.Email)
+		if err != nil {
+			respondError(w, http.StatusNotFound, "user not found")
+			return
+		}
+		memberID = user.ID
+	}
+
+	if req.Role == "" {
+		req.Role = "member"
+	}
+
+	if err := h.svc.InviteMember(r.Context(), id, memberID, req.Role, userID); err != nil {
 		respondError(w, http.StatusForbidden, err.Error())
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) ListMembers(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "workspaceId")
+	members, err := h.svc.ListMembers(r.Context(), id)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	respond(w, http.StatusOK, members)
 }
 
 func (h *Handler) RemoveMember(w http.ResponseWriter, r *http.Request) {
