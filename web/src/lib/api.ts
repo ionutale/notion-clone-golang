@@ -1,5 +1,5 @@
 import { authStore } from '$lib/stores/auth.svelte';
-import type { Block, BlockType, PageSummary, PageTree } from './types';
+import type { Block, BlockType, PageSummary, PageTree, SearchResult, User } from './types';
 
 const BASE_URL = '/api/v1';
 
@@ -77,6 +77,23 @@ class ApiClient {
 
   moveBlock(id: string, parentId: string | null, position: number): Promise<Block> {
     return this.request('PATCH', `/blocks/${id}/move`, { parent_id: parentId, position });
+  }
+
+  updateProfile(data: { name?: string; email?: string; current_password?: string }): Promise<User> {
+    return this.request('PATCH', '/auth/me', data);
+  }
+
+  updatePassword(data: { current_password: string; new_password: string }): Promise<void> {
+    return this.request('PATCH', '/auth/me/password', data);
+  }
+
+  deleteAccount(data: { password: string }): Promise<void> {
+    return this.request('DELETE', '/auth/me', data);
+  }
+
+  async search(query: string, limit = 20, offset = 0): Promise<SearchResult[]> {
+    const q = encodeURIComponent(query);
+    return this.request('GET', `/search?q=${q}&limit=${limit}&offset=${offset}`);
   }
 
   async uploadFile(file: File): Promise<{ url: string }> {

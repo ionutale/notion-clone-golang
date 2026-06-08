@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
   import { blockStore } from '$lib/stores/blocks.svelte';
   import BlockRenderer from './BlockRenderer.svelte';
   import FormatToolbar from './FormatToolbar.svelte';
@@ -55,6 +56,10 @@
   }
 
   async function handlePageKeydown(e: KeyboardEvent) {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      e.preventDefault();
+      goto('/search');
+    }
     if (e.key === 'Escape') {
       slashMenu = null;
     }

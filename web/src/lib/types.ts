@@ -44,3 +44,12 @@ export interface PageSummary {
   position: number;
   created_at: string;
 }
+
+export interface SearchResult {
+  block_id: string;
+  page_id: string;
+  page_title: string;
+  block_type: string;
+  excerpt: string;
+  rank: number;
+}

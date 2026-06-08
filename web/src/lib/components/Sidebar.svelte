@@ -297,6 +297,11 @@
       type="text"
       placeholder="Search pages..."
       bind:value={search}
+      onkeydown={(e) => {
+        if (e.key === 'Enter' && search.trim()) {
+          goto(`/search?q=${encodeURIComponent(search.trim())}`);
+        }
+      }}
       class="input input-ghost input-xs w-full"
     />
   </div>
