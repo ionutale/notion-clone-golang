@@ -18,18 +18,25 @@
   let block = $derived(blockStore.blocks.get(blockId));
   let el = $state<HTMLDivElement>();
 
-  import { onMount } from 'svelte';
+  $effect(() => {
+    const html = block?.content?.html ?? '';
+    if (el && el.innerHTML !== html) {
+      el.innerHTML = html;
+    }
+  });
 
-  onMount(() => {
+  $effect(() => {
     if (el && shouldFocus) {
       el.focus();
     }
   });
 
-  function handleKeydown(e: KeyboardEvent) {
+  async function handleKeydown(e: KeyboardEvent) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      save();
+      e.stopPropagation();
+      if (el && (el.textContent ?? '').trim() === '') return;
+      await save();
       onEnter();
     } else if (e.key === 'Backspace') {
       if (el && (el.textContent ?? '').trim() === '') {
@@ -54,6 +61,13 @@
     } else if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'S') {
       e.preventDefault();
       document.execCommand('strikeThrough');
+    } else if (e.key === '/' && (el?.textContent ?? '') === '') {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      onSlash({ x: rect.left, y: rect.bottom });
+      el.textContent = '';
     } else if (e.key === 'Tab' && !e.shiftKey) {
       e.preventDefault();
       onIndent?.();
@@ -63,32 +77,38 @@
     }
   }
 
-  function save() {
+  async function save() {
     if (!el) return;
-    blockStore.updateBlock(blockId, { content: { html: el.innerHTML } });
+    await blockStore.updateBlock(blockId, { content: { html: el.innerHTML } });
   }
 
   function handleBlur() {
+    focused = false;
     save();
   }
 
   let isEmpty = $derived(!block?.content?.html || block.content.html === '<br>');
+  let focused = $state(false);
+  let showPlaceholder = $derived(isEmpty && !focused);
 </script>
 
 <li class="list-item" style="list-style: none;">
   <span class="number-marker text-base-content/40 select-none mr-2 tabular-nums">{index}.</span>
-  <div
-    bind:this={el}
-    contenteditable="true"
-    class="block-editor flex-1 text-base-content min-h-[1.5em] outline-none"
-    class:is-empty={isEmpty}
-    tabindex="0"
-    onkeydown={handleKeydown}
-    onblur={handleBlur}
+  <div class="relative flex-1">
+    {#if showPlaceholder}
+      <span class="absolute left-0 top-0 pointer-events-none" style="color: hsl(var(--bc) / 0.3); line-height: 1.5rem;">List item</span>
+    {/if}
+    <div
+      bind:this={el}
+      contenteditable="true"
+      class={['block-editor text-base-content min-h-[1.5em] outline-none', { 'is-empty': isEmpty }]}
+      tabindex="0"
+      onfocus={() => focused = true}
+      onkeydown={handleKeydown}
+      onblur={handleBlur}
     role="textbox"
     aria-multiline="true"
-  >
-    {block?.content?.html ?? ''}
+  ></div>
   </div>
 </li>
 
@@ -103,10 +123,9 @@
     min-width: 1.5rem;
     text-align: right;
   }
-  .block-editor:empty::before,
-  .block-editor.is-empty::before {
-    content: 'List item';
-    color: hsl(var(--bc) / 0.3);
-    pointer-events: none;
+  .block-editor :global(a) {
+    color: hsl(var(--p));
+    text-decoration: underline;
+    cursor: pointer;
   }
 </style>

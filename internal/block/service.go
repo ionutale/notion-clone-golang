@@ -30,6 +30,19 @@ func (s *Service) CreatePage(ctx context.Context, workspaceID, userID uuid.UUID,
 	if err := s.repo.Create(ctx, &block); err != nil {
 		return Block{}, fmt.Errorf("create page: %w", err)
 	}
+
+	initialContent, _ := json.Marshal(map[string]string{"html": ""})
+	initial := Block{
+		WorkspaceID: workspaceID,
+		ParentID:    &block.ID,
+		Type:        TypeText,
+		Content:     initialContent,
+		CreatedBy:   &userID,
+	}
+	if err := s.repo.Create(ctx, &initial); err != nil {
+		return Block{}, fmt.Errorf("create initial block: %w", err)
+	}
+
 	return block, nil
 }
 

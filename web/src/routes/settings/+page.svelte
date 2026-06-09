@@ -2,6 +2,7 @@
   import { api } from '$lib/api';
   import { authStore } from '$lib/stores/auth.svelte';
   import { goto } from '$app/navigation';
+  import PromptDialog from '$lib/components/PromptDialog.svelte';
 
   let name = $state(authStore.user?.name ?? '');
   let email = $state(authStore.user?.email ?? '');
@@ -21,8 +22,16 @@
   let deleteSaving = $state(false);
   let deleteError = $state('');
 
-  async function saveProfile(e: Event) {
-    e.preventDefault();
+  let showEmailPasswordPrompt = $state(false);
+  let showDeletePasswordPrompt = $state(false);
+  let pendingProfilePassword = $state('');
+
+  async function goBack() {
+    await goto('/');
+  }
+
+  async function handleEmailChangeSubmit() {
+    if (!pendingProfilePassword) return;
     profileSaving = true;
     profileError = '';
     profileSuccess = false;
@@ -30,8 +39,29 @@
       const user = await api.updateProfile({
         name,
         email,
-        current_password: email !== authStore.user?.email ? prompt('Enter current password to change email:') ?? undefined : undefined,
+        current_password: pendingProfilePassword,
       });
+      authStore.user = user;
+      profileSuccess = true;
+    } catch (err: any) {
+      profileError = err.message ?? 'Failed to update profile';
+    } finally {
+      profileSaving = false;
+      pendingProfilePassword = '';
+    }
+  }
+
+  async function saveProfile(e: Event) {
+    e.preventDefault();
+    if (email !== authStore.user?.email) {
+      showEmailPasswordPrompt = true;
+      return;
+    }
+    profileSaving = true;
+    profileError = '';
+    profileSuccess = false;
+    try {
+      const user = await api.updateProfile({ name, email });
       authStore.user = user;
       profileSuccess = true;
     } catch (err: any) {
@@ -61,17 +91,16 @@
     }
   }
 
-  async function handleDeleteAccount() {
+  async function handleDeleteAccount(password: string) {
+    if (!password) return;
     if (deleteConfirmEmail !== authStore.user?.email) return;
     deleteSaving = true;
     deleteError = '';
     try {
-      const password = prompt('Enter your password to confirm deletion:');
-      if (!password) { deleteSaving = false; return; }
       await api.deleteAccount({ password });
       authStore.user = null;
       authStore.accessToken = null;
-      goto('/login');
+      await goto('/login');
     } catch (err: any) {
       deleteError = err.message ?? 'Failed to delete account';
     } finally {
@@ -80,20 +109,53 @@
   }
 </script>
 
+<PromptDialog
+  open={showEmailPasswordPrompt}
+  title="Enter your current password"
+  placeholder="Current password"
+  confirmText="Confirm"
+  onConfirm={(pw: string) => {
+    showEmailPasswordPrompt = false;
+    pendingProfilePassword = pw;
+    handleEmailChangeSubmit();
+  }}
+  onCancel={() => showEmailPasswordPrompt = false}
+/>
+
+<PromptDialog
+  open={showDeletePasswordPrompt}
+  title="Enter your password to confirm deletion"
+  placeholder="Password"
+  confirmText="Delete"
+  onConfirm={(pw: string) => {
+    showDeletePasswordPrompt = false;
+    handleDeleteAccount(pw);
+  }}
+  onCancel={() => showDeletePasswordPrompt = false}
+/>
+
 <div class="max-w-2xl mx-auto py-8 px-4">
-  <h1 class="text-2xl font-bold mb-8">Settings</h1>
+  <div class="flex items-center gap-4 mb-8">
+    <button onclick={goBack} class="btn btn-ghost btn-sm">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+      </svg>
+      Back
+    </button>
+    <h1 class="text-2xl font-bold">Settings</h1>
+  </div>
 
   <div class="card bg-base-100 border border-base-300 mb-6">
     <div class="card-body">
       <h2 class="card-title text-lg mb-4">Profile</h2>
       <form onsubmit={saveProfile}>
         <div class="form-control mb-3">
-          <label class="label"><span class="label-text">Name</span></label>
-          <input bind:value={name} type="text" class="input input-bordered" required />
+          <label class="label" for="settings-name"><span class="label-text">Name</span></label>
+          <input id="settings-name" bind:value={name} type="text" class="input input-bordered" required />
         </div>
         <div class="form-control mb-3">
-          <label class="label"><span class="label-text">Email</span></label>
-          <input bind:value={email} type="email" class="input input-bordered" required />
+          <label class="label" for="settings-email"><span class="label-text">Email</span></label>
+          <input id="settings-email" bind:value={email} type="email" class="input input-bordered" required />
         </div>
         {#if profileError}<div class="alert alert-error text-sm py-2 mb-3">{profileError}</div>{/if}
         {#if profileSuccess}<div class="alert alert-success text-sm py-2 mb-3">Profile updated</div>{/if}
@@ -109,16 +171,16 @@
       <h2 class="card-title text-lg mb-4">Password</h2>
       <form onsubmit={savePassword}>
         <div class="form-control mb-3">
-          <label class="label"><span class="label-text">Current password</span></label>
-          <input bind:value={currentPassword} type="password" class="input input-bordered" required />
+          <label class="label" for="settings-current-pw"><span class="label-text">Current password</span></label>
+          <input id="settings-current-pw" bind:value={currentPassword} type="password" class="input input-bordered" required />
         </div>
         <div class="form-control mb-3">
-          <label class="label"><span class="label-text">New password</span></label>
-          <input bind:value={newPassword} type="password" class="input input-bordered" required minlength={8} />
+          <label class="label" for="settings-new-pw"><span class="label-text">New password</span></label>
+          <input id="settings-new-pw" bind:value={newPassword} type="password" class="input input-bordered" required minlength={8} />
         </div>
         <div class="form-control mb-3">
-          <label class="label"><span class="label-text">Confirm new password</span></label>
-          <input bind:value={confirmPassword} type="password" class="input input-bordered" required minlength={8} />
+          <label class="label" for="settings-confirm-pw"><span class="label-text">Confirm new password</span></label>
+          <input id="settings-confirm-pw" bind:value={confirmPassword} type="password" class="input input-bordered" required minlength={8} />
         </div>
         {#if passwordError}<div class="alert alert-error text-sm py-2 mb-3">{passwordError}</div>{/if}
         {#if passwordSuccess}<div class="alert alert-success text-sm py-2 mb-3">Password updated</div>{/if}
@@ -142,7 +204,7 @@
         <div class="flex gap-2">
           <button onclick={() => { showDeleteConfirm = false; deleteConfirmEmail = ''; }} class="btn btn-ghost">Cancel</button>
           <button
-            onclick={handleDeleteAccount}
+            onclick={() => showDeletePasswordPrompt = true}
             class="btn btn-error"
             disabled={deleteConfirmEmail !== authStore.user?.email || deleteSaving}
           >

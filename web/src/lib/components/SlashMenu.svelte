@@ -93,15 +93,14 @@
       type="text"
       placeholder="Filter..."
       bind:value={filter}
+      autofocus
       class="input input-ghost input-xs w-full"
     />
   </div>
   <div class="max-h-64 overflow-y-auto py-1">
     {#each filtered as item, i (item.type)}
       <button
-        class="w-full text-left px-3 py-2 flex items-center gap-3 text-sm transition-colors"
-        class:bg-base-200={i === selectedIndex}
-        class:hover:bg-base-200={i !== selectedIndex}
+        class={['w-full text-left px-3 py-2 flex items-center gap-3 text-sm transition-colors', { 'bg-base-200': i === selectedIndex, 'hover:bg-base-200': i !== selectedIndex }]}
         onmouseenter={() => selectedIndex = i}
         onmousedown={() => select(item.type)}
         role="option"

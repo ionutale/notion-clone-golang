@@ -1,4 +1,5 @@
 import { authStore } from '$lib/stores/auth.svelte';
+import { workspaceStore } from '$lib/stores/workspaces.svelte';
 import type { Block, BlockType, PageSummary, PageTree, SearchResult, User } from './types';
 
 const BASE_URL = '/api/v1';
@@ -10,7 +11,40 @@ export class ApiError extends Error {
 }
 
 class ApiClient {
-  private async requestInner<T>(method: string, path: string, body?: any): Promise<T> {
+  private _refreshing = false;
+  private _wsLoadPromise: Promise<void> | null = null;
+
+  private async ensureWorkspace(): Promise<void> {
+    if (workspaceStore.activeWorkspaceId) return;
+    if (workspaceStore.workspaces.length > 0) {
+      workspaceStore.activeWorkspaceId = workspaceStore.workspaces[0].id;
+      return;
+    }
+    if (!this._wsLoadPromise) {
+      this._wsLoadPromise = workspaceStore.load();
+    }
+    await this._wsLoadPromise;
+  }
+
+  private async wsPrefix(): Promise<string> {
+    await this.ensureWorkspace();
+    return workspaceStore.activeWorkspaceId
+      ? `/workspaces/${workspaceStore.activeWorkspaceId}`
+      : '';
+  }
+
+  private needsWorkspace(path: string): boolean {
+    return !path.startsWith('/auth') && !path.startsWith('/workspaces') && !path.startsWith('/uploads');
+  }
+
+  requestInner<T>(method: string, path: string, body?: any): Promise<T> {
+    return this._requestInner<T>(method, path, body);
+  }
+
+  private async _requestInner<T>(method: string, path: string, body?: any): Promise<T> {
+    if (this.needsWorkspace(path)) {
+      await this.ensureWorkspace();
+    }
     const opts: RequestInit = { method };
     if (body !== undefined) {
       opts.headers = { 'Content-Type': 'application/json' };
@@ -20,63 +54,81 @@ class ApiClient {
       opts.headers = { ...(opts.headers as Record<string, string>), 'Authorization': `Bearer ${authStore.accessToken}` };
     }
     const res = await fetch(`${BASE_URL}${path}`, opts);
-    if (!res.ok) throw new ApiError(res.status, await res.text());
+    if (!res.ok) {
+      const text = await res.text();
+      let message = text;
+      try { const json = JSON.parse(text); if (json.error) message = json.error; } catch { /* use raw text */ }
+      throw new ApiError(res.status, message);
+    }
     if (res.status === 204) return undefined as T;
     return res.json();
   }
 
   async request<T>(method: string, path: string, body?: any): Promise<T> {
     try {
-      return await this.requestInner<T>(method, path, body);
+      return await this._requestInner<T>(method, path, body);
     } catch (err: any) {
-      if (err instanceof ApiError && err.status === 401) {
-        await authStore.refresh();
+      if (err instanceof ApiError && err.status === 401 && !this._refreshing) {
+        this._refreshing = true;
+        try {
+          await authStore.refresh();
+        } finally {
+          this._refreshing = false;
+        }
         if (authStore.accessToken) {
-          return this.requestInner<T>(method, path, body);
+          return this._requestInner<T>(method, path, body);
         }
       }
       throw err;
     }
   }
 
-  createPage(title = 'Untitled'): Promise<Block> {
-    return this.request('POST', '/pages', { title });
+  async createPage(title = 'Untitled'): Promise<Block> {
+    return this.request('POST', `${await this.wsPrefix()}/pages`, { title });
   }
 
-  listPages(): Promise<PageSummary[]> {
-    return this.request('GET', '/pages');
+  async listPages(): Promise<PageSummary[]> {
+    return this.request('GET', `${await this.wsPrefix()}/pages`);
   }
 
-  getPageTree(id: string): Promise<PageTree> {
-    return this.request('GET', `/pages/${id}`);
+  async getPageTree(id: string): Promise<PageTree> {
+    return this.request('GET', `${await this.wsPrefix()}/pages/${id}`);
   }
 
-  createBlock(parentId: string, type: BlockType, content: any = {}, position?: number): Promise<Block> {
-    return this.request('POST', '/blocks', { parent_id: parentId, type, content, position });
+  async createBlock(parentId: string, type: BlockType, content: any = {}, position?: number): Promise<Block> {
+    return this.request('POST', `${await this.wsPrefix()}/blocks`, { parent_id: parentId, type, content, position });
   }
 
-  updateBlock(id: string, data: { content?: any; type?: BlockType }): Promise<Block> {
-    return this.request('PATCH', `/blocks/${id}`, data);
+  async updateBlock(id: string, data: { content?: any; type?: BlockType }): Promise<Block> {
+    return this.request('PATCH', `${await this.wsPrefix()}/blocks/${id}`, data);
   }
 
-  deleteBlock(id: string): Promise<void> {
-    return this.request('DELETE', `/blocks/${id}`);
+  async deleteBlock(id: string): Promise<void> {
+    return this.request('DELETE', `${await this.wsPrefix()}/blocks/${id}`);
   }
 
-  restoreBlock(id: string): Promise<Block> {
-    return this.request('PATCH', `/blocks/${id}/restore`);
+  async restoreBlock(id: string): Promise<Block> {
+    return this.request('PATCH', `${await this.wsPrefix()}/blocks/${id}/restore`);
   }
 
-  listFavorites(): Promise<PageSummary[]> {
-    return this.request('GET', '/favorites');
+  async listTrash(): Promise<PageSummary[]> {
+    return this.request('GET', `${await this.wsPrefix()}/trash`);
+  }
+
+  async permanentDeleteBlock(id: string): Promise<void> {
+    return this.request('DELETE', `${await this.wsPrefix()}/blocks/${id}/permanent`);
+  }
+
+  async listFavorites(): Promise<PageSummary[]> {
+    return this.request('GET', `${await this.wsPrefix()}/favorites`);
   }
 
   async toggleFavorite(id: string, favorited: boolean): Promise<Block> {
-    return this.request('PATCH', `/blocks/${id}`, { content: { favorited } });
+    return this.request('PATCH', `${await this.wsPrefix()}/blocks/${id}`, { content: { favorited } });
   }
 
-  moveBlock(id: string, parentId: string | null, position: number): Promise<Block> {
-    return this.request('PATCH', `/blocks/${id}/move`, { parent_id: parentId, position });
+  async moveBlock(id: string, parentId: string | null, position: number): Promise<Block> {
+    return this.request('PATCH', `${await this.wsPrefix()}/blocks/${id}/move`, { parent_id: parentId, position });
   }
 
   updateProfile(data: { name?: string; email?: string; current_password?: string }): Promise<User> {
@@ -93,7 +145,7 @@ class ApiClient {
 
   async search(query: string, limit = 20, offset = 0): Promise<SearchResult[]> {
     const q = encodeURIComponent(query);
-    return this.request('GET', `/search?q=${q}&limit=${limit}&offset=${offset}`);
+    return this.request('GET', `${await this.wsPrefix()}/search?q=${q}&limit=${limit}&offset=${offset}`);
   }
 
   async uploadFile(file: File): Promise<{ url: string }> {
@@ -104,7 +156,12 @@ class ApiClient {
       opts.headers = { 'Authorization': `Bearer ${authStore.accessToken}` };
     }
     const res = await fetch(`${BASE_URL}/uploads`, opts);
-    if (!res.ok) throw new ApiError(res.status, await res.text());
+    if (!res.ok) {
+      const text = await res.text();
+      let message = text;
+      try { const json = JSON.parse(text); if (json.error) message = json.error; } catch { /* use raw text */ }
+      throw new ApiError(res.status, message);
+    }
     return res.json();
   }
 }

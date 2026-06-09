@@ -3,7 +3,7 @@
   import { authStore } from '$lib/stores/auth.svelte';
   import { workspaceStore } from '$lib/stores/workspaces.svelte';
   import { onMount } from 'svelte';
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import { goto } from '$app/navigation';
 
   let { children } = $props();
@@ -12,11 +12,11 @@
 
   onMount(async () => {
     await authStore.check();
-    if (!authStore.user && !publicPaths.includes($page.url.pathname)) {
-      goto('/login');
-    }
     if (authStore.user) {
       await workspaceStore.load();
+    }
+    if (!authStore.user && !publicPaths.includes(page.url.pathname)) {
+      await goto('/login');
     }
   });
 
@@ -54,7 +54,7 @@
     <div class="flex justify-center items-center min-h-screen">
       <span class="loading loading-spinner loading-lg text-primary"></span>
     </div>
-  {:else if !authStore.user && !publicPaths.includes($page.url.pathname)}
+  {:else if !authStore.user && !publicPaths.includes(page.url.pathname)}
     <!-- will redirect via onMount -->
   {:else}
     <main class="p-6">

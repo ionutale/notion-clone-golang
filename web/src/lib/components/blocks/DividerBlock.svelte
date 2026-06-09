@@ -9,11 +9,12 @@
       onOutdent?: () => void;
     } = $props();
 
-  let el = $state<HTMLDivElement>();
+  let el = $state<HTMLButtonElement>();
 
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
+      e.stopPropagation();
       onEnter();
     } else if (e.key === 'Backspace') {
       e.preventDefault();
@@ -34,13 +35,11 @@
   }
 </script>
 
-<!-- svelte-ignore a11y_no_noninteractive_tabindex a11y_no_noninteractive_element_interactions -->
-<div
+<button
   bind:this={el}
-  tabindex="0"
-  class="divider-block my-3 px-1 outline-none rounded hover:bg-base-200/50 focus:bg-base-200/50 transition-colors cursor-default"
+  class="divider-block my-3 px-1 outline-none rounded hover:bg-base-200/50 focus:bg-base-200/50 transition-colors cursor-default w-full text-left"
   onkeydown={handleKeydown}
   aria-label="Divider"
 >
-  <hr class="border-t border-base-300" />
-</div>
+  <hr class="border-t border-base-300 pointer-events-none" />
+</button>

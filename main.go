@@ -168,6 +168,15 @@ func main() {
 		AllowCredentials: true,
 	}))
 
+	// Serve uploaded files
+	uploadsDir := "./data/uploads"
+	r.Route("/uploads", func(r chi.Router) {
+		r.Get("/*", func(w http.ResponseWriter, r *http.Request) {
+			filePath := filepath.Join(uploadsDir, chi.URLParam(r, "*"))
+			http.ServeFile(w, r, filePath)
+		})
+	})
+
 	if blockSvc != nil {
 		internal.MountAPI(r, blockSvc, fileStore, authSvc, wsSvc)
 	} else {

@@ -3,9 +3,11 @@
   import { workspaceStore } from '$lib/stores/workspaces.svelte';
   import { authStore } from '$lib/stores/auth.svelte';
   import { goto } from '$app/navigation';
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import { api } from '$lib/api';
   import type { PageSummary } from '$lib/types';
+  import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+  import PromptDialog from '$lib/components/PromptDialog.svelte';
 
   interface Member {
     user_id: string;
@@ -17,7 +19,7 @@
 
   let inviteEmail = $state('');
   let inviting = $state(false);
-  let workspaceMembers = $state<Member[]>([]);
+  let workspaceMembers = $state.raw<Member[]>([]);
 
   async function loadMembers() {
     if (!workspaceStore.activeWorkspaceId) return;
@@ -31,6 +33,7 @@
   async function handleInvite() {
     if (!inviteEmail.trim() || !workspaceStore.activeWorkspaceId) return;
     inviting = true;
+    inviteError = '';
     try {
       await api.request('POST', `/workspaces/${workspaceStore.activeWorkspaceId}/members`, {
         email: inviteEmail.trim(),
@@ -39,17 +42,21 @@
       inviteEmail = '';
       await loadMembers();
     } catch (err: any) {
-      alert(err.message ?? 'Failed to invite');
+      inviteError = err.message ?? 'Failed to invite';
     } finally {
       inviting = false;
     }
   }
 
-  let pages = $state<PageSummary[]>([]);
+  let inviteError = $state('');
+  let deleteConfirmId = $state<string | null>(null);
+  let showNewWorkspacePrompt = $state(false);
+
+  let pages = $state.raw<PageSummary[]>([]);
   let loading = $state(true);
   let dropdownOpen = $state(false);
   let search = $state('');
-  let activeId = $derived($page.params.id);
+  let activeId = $derived(page.params.id);
 
   let filtered = $derived(
     search ? pages.filter(p => p.title.toLowerCase().includes(search.toLowerCase())) : pages
@@ -92,16 +99,15 @@
   async function createPage() {
     const page = await blockStore.createPage();
     pages = [...pages, { id: page.id, title: page.content?.title ?? 'Untitled', icon: page.content?.icon, icon_type: page.content?.icon_type, position: page.position, created_at: page.created_at }];
-    goto(`/pages/${page.id}`);
+    await goto(`/pages/${page.id}`);
   }
 
-  async function deletePage(e: Event, id: string) {
-    e.stopPropagation();
-    if (!confirm('Delete this page?')) return;
+  async function deletePage(id: string) {
+    deleteConfirmId = null;
     try {
       await blockStore.deleteBlock(id);
       pages = pages.filter(p => p.id !== id);
-      if (activeId === id) goto('/');
+      if (activeId === id) await goto('/');
     } catch (err) {
       console.error('Failed to delete page', err);
     }
@@ -260,6 +266,29 @@
   }
 </script>
 
+<ConfirmDialog
+  open={deleteConfirmId !== null}
+  title="Delete page?"
+  message="Delete this page?"
+  confirmText="Delete"
+  variant="danger"
+  onConfirm={() => { if (deleteConfirmId) deletePage(deleteConfirmId); }}
+  onCancel={() => deleteConfirmId = null}
+/>
+
+<PromptDialog
+  open={showNewWorkspacePrompt}
+  title="Workspace name"
+  placeholder="My Workspace"
+  confirmText="Create"
+  onConfirm={async (name: string) => {
+    showNewWorkspacePrompt = false;
+    if (name) await workspaceStore.create(name);
+    dropdownOpen = false;
+  }}
+  onCancel={() => { showNewWorkspacePrompt = false; dropdownOpen = false; }}
+/>
+
 <aside class="w-64 h-full bg-base-200 border-r border-base-300 flex flex-col">
   <div class="p-3 border-b border-base-300">
     <div class="relative mb-2">
@@ -274,18 +303,17 @@
       </button>
       {#if dropdownOpen}
         <div class="absolute top-full left-0 right-0 mt-1 bg-base-100 border border-base-300 rounded-lg shadow-xl z-50 py-1">
-          {#each workspaceStore.workspaces as ws}
+          {#each workspaceStore.workspaces as ws (ws.id)}
             <button
               onclick={() => { workspaceStore.switchWorkspace(ws.id); dropdownOpen = false; }}
-              class:bg-base-200={ws.id === workspaceStore.activeWorkspaceId}
-              class="w-full text-left px-3 py-2 text-sm hover:bg-base-200"
+              class={['w-full text-left px-3 py-2 text-sm hover:bg-base-200', { 'bg-base-200': ws.id === workspaceStore.activeWorkspaceId }]}
             >
               {ws.name}
             </button>
           {/each}
           <hr class="border-base-200 my-1">
           <button
-            onclick={async () => { const name = prompt('Workspace name'); if (name) await workspaceStore.create(name); dropdownOpen = false; }}
+            onclick={() => showNewWorkspacePrompt = true}
             class="w-full text-left px-3 py-2 text-sm text-primary hover:bg-base-200"
           >
             + New workspace
@@ -294,7 +322,7 @@
           <div class="px-3 py-2">
             <p class="text-xs font-medium text-base-content/40 uppercase mb-2">Members</p>
             {#if workspaceMembers.length > 0}
-              {#each workspaceMembers as m}
+              {#each workspaceMembers as m (m.user_id)}
                 <div class="flex items-center justify-between py-1">
                   <span class="text-sm truncate">{m.name || m.email}</span>
                   <span class="text-xs text-base-content/40 shrink-0">{m.role}</span>
@@ -318,6 +346,9 @@
                 {inviting ? '...' : 'Invite'}
               </button>
             </div>
+            {#if inviteError}
+              <p class="text-xs text-error mt-1">{inviteError}</p>
+            {/if}
           </div>
         </div>
       {/if}
@@ -337,7 +368,7 @@
     <ul class="menu menu-sm p-1">
       {#each favoritePages as p (p.id)}
         <li>
-          <div class="flex items-center gap-2 rounded-lg" class:active={p.id === activeId}>
+          <div class={['flex items-center gap-2 rounded-lg', { active: p.id === activeId }]}>
             <a href="/pages/{p.id}" class="flex-1 truncate flex items-center gap-1.5">
               {#if p.icon_type === 'image'}
                 <img src={p.icon} alt="" class="w-4 h-4 rounded object-cover shrink-0" />
@@ -371,9 +402,9 @@
       type="text"
       placeholder="Search pages..."
       bind:value={search}
-      onkeydown={(e) => {
+      onkeydown={async (e) => {
         if (e.key === 'Enter' && search.trim()) {
-          goto(`/search?q=${encodeURIComponent(search.trim())}`);
+          await goto(`/search?q=${encodeURIComponent(search.trim())}`);
         }
       }}
       class="input input-ghost input-xs w-full"
@@ -402,15 +433,13 @@
             ontouchmove={handleTouchMove}
             ontouchend={handleTouchEnd}
             data-page-id={p.id}
-            class="group"
-            class:opacity-50={draggedId === p.id}
+            class={['group', { 'opacity-50': draggedId === p.id }]}
           >
             {#if dragOverId === p.id && dragPosition === 'before'}
               <div class="h-0.5 bg-primary rounded-full mb-0.5"></div>
             {/if}
             <div
-              class="flex items-center gap-2 rounded-lg"
-              class:active={p.id === activeId}
+              class={['flex items-center gap-2 rounded-lg', { active: p.id === activeId }]}
             >
               {#if editingId !== p.id}
                 <span class="drag-handle cursor-grab text-base-content/20 hover:text-base-content/40 transition-colors px-0.5 select-none opacity-0 group-hover:opacity-100">
@@ -456,8 +485,7 @@
               {/if}
               <button
                 onclick={async () => { await blockStore.toggleFavorite(p.id); }}
-                class="btn btn-ghost btn-xs px-1 opacity-0 group-hover:opacity-100 hover:opacity-100"
-                class:text-warning={blockStore.favoriteIds.has(p.id)}
+                class={['btn btn-ghost btn-xs px-1 opacity-0 group-hover:opacity-100 hover:opacity-100', { 'text-warning': blockStore.favoriteIds.has(p.id) }]}
                 title={blockStore.favoriteIds.has(p.id) ? 'Unfavorite' : 'Favorite'}
               >
                 <svg class="w-3.5 h-3.5" fill={blockStore.favoriteIds.has(p.id) ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
@@ -465,7 +493,7 @@
                 </svg>
               </button>
               <button
-                onclick={(e) => deletePage(e, p.id)}
+                onclick={() => deleteConfirmId = p.id}
                 class="btn btn-ghost btn-xs px-1 opacity-0 group-hover:opacity-100 hover:opacity-100"
                 title="Delete page"
               >
@@ -498,7 +526,7 @@
       Trash
     </a>
     <button
-      onclick={async () => { await authStore.logout(); goto('/login'); }}
+      onclick={async () => { await authStore.logout(); await goto('/login'); }}
       class="w-full text-left px-3 py-2 text-sm text-base-content/50 hover:text-error transition-colors"
     >
       Log out

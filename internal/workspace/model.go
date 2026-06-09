@@ -10,9 +10,9 @@ type Workspace struct {
 }
 
 type Member struct {
-	UserID   string `json:"user_id"`
-	Role     string `json:"role"`
-	JoinedAt string `json:"joined_at"`
+	UserID   string    `json:"user_id"`
+	Role     string    `json:"role"`
+	JoinedAt time.Time `json:"joined_at"`
 }
 
 type CreateRequest struct {
@@ -26,9 +26,9 @@ type InviteRequest struct {
 }
 
 type MemberWithUser struct {
-	UserID   string `json:"user_id"`
-	Email    string `json:"email"`
-	Name     string `json:"name"`
-	Role     string `json:"role"`
-	JoinedAt string `json:"joined_at"`
+	UserID   string    `json:"user_id"`
+	Email    string    `json:"email"`
+	Name     string    `json:"name"`
+	Role     string    `json:"role"`
+	JoinedAt time.Time `json:"joined_at"`
 }

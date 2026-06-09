@@ -96,7 +96,7 @@ func (r *Repository) GetTree(ctx context.Context, pageID uuid.UUID) ([]Block, er
 	}
 	defer rows.Close()
 
-	var blocks []Block
+	blocks := make([]Block, 0)
 	for rows.Next() {
 		b, err := scanBlock(rows)
 		if err != nil {
@@ -118,7 +118,7 @@ func (r *Repository) ListPages(ctx context.Context, workspaceID uuid.UUID) ([]Pa
 	}
 	defer rows.Close()
 
-	var pages []PageSummary
+	pages := make([]PageSummary, 0)
 	for rows.Next() {
 		var p PageSummary
 		if err := rows.Scan(&p.ID, &p.Title, &p.Icon, &p.IconType, &p.Position, &p.CreatedAt, &p.UpdatedAt); err != nil {
@@ -173,6 +173,9 @@ func (r *Repository) UpdatePath(ctx context.Context, id uuid.UUID, path string) 
 }
 
 func (r *Repository) Search(ctx context.Context, workspaceID uuid.UUID, query string, limit, offset int) ([]SearchResult, error) {
+	if query == "" {
+		return make([]SearchResult, 0), nil
+	}
 	rows, err := r.pool.Query(ctx, `
 		WITH RECURSIVE page_ancestors AS (
 			SELECT b.id, b.id AS page_id, b.content->>'title' AS page_title
@@ -202,7 +205,7 @@ func (r *Repository) Search(ctx context.Context, workspaceID uuid.UUID, query st
 	}
 	defer rows.Close()
 
-	var results []SearchResult
+	results := make([]SearchResult, 0)
 	for rows.Next() {
 		var r SearchResult
 		if err := rows.Scan(&r.BlockID, &r.PageID, &r.PageTitle, &r.BlockType, &r.Excerpt, &r.Rank); err != nil {
@@ -226,7 +229,7 @@ func (r *Repository) ListFavorites(ctx context.Context, workspaceID uuid.UUID) (
 	}
 	defer rows.Close()
 
-	var pages []PageSummary
+	pages := make([]PageSummary, 0)
 	for rows.Next() {
 		var p PageSummary
 		if err := rows.Scan(&p.ID, &p.Title, &p.Icon, &p.IconType, &p.Position, &p.CreatedAt, &p.UpdatedAt); err != nil {
@@ -261,7 +264,7 @@ func (r *Repository) GetSiblings(ctx context.Context, parentID *uuid.UUID, works
 	}
 	defer rows.Close()
 
-	var blocks []Block
+	blocks := make([]Block, 0)
 	for rows.Next() {
 		b, err := scanBlock(rows)
 		if err != nil {
@@ -289,7 +292,7 @@ func (r *Repository) ListTrash(ctx context.Context, workspaceID uuid.UUID) ([]Pa
 	}
 	defer rows.Close()
 
-	var pages []PageSummary
+	pages := make([]PageSummary, 0)
 	for rows.Next() {
 		var p PageSummary
 		if err := rows.Scan(&p.ID, &p.Title, &p.Icon, &p.IconType, &p.CreatedAt, &p.UpdatedAt); err != nil {

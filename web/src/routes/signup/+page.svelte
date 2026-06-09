@@ -1,5 +1,6 @@
 <script lang="ts">
   import { authStore } from '$lib/stores/auth.svelte';
+  import { workspaceStore } from '$lib/stores/workspaces.svelte';
   import { goto } from '$app/navigation';
 
   let email = $state('');
@@ -14,7 +15,8 @@
     loading = true;
     try {
       await authStore.signup(email, password, name);
-      goto('/');
+      await workspaceStore.load();
+      await goto('/');
     } catch (err: any) {
       error = err.message ?? 'Signup failed';
     } finally {

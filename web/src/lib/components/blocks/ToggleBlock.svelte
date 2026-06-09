@@ -19,9 +19,14 @@
   let open = $state(false);
   let children = $derived(blockStore.childrenMap.get(blockId) ?? []);
 
-  import { onMount } from 'svelte';
+  $effect(() => {
+    const html = block?.content?.html ?? '';
+    if (el && el.innerHTML !== html) {
+      el.innerHTML = html;
+    }
+  });
 
-  onMount(() => {
+  $effect(() => {
     if (el && shouldFocus) {
       el.focus();
     }
@@ -29,10 +34,12 @@
 
   function toggle() { open = !open; }
 
-  function handleKeydown(e: KeyboardEvent) {
+  async function handleKeydown(e: KeyboardEvent) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      save();
+      e.stopPropagation();
+      if (el && (el.textContent ?? '').trim() === '') return;
+      await save();
       onEnter();
     } else if (e.key === 'Backspace') {
       if (el && (el.textContent ?? '').trim() === '') {
@@ -66,16 +73,19 @@
     }
   }
 
-  function save() {
+  async function save() {
     if (!el) return;
-    blockStore.updateBlock(blockId, { content: { html: el.innerHTML } });
+    await blockStore.updateBlock(blockId, { content: { html: el.innerHTML } });
   }
 
   function handleBlur() {
+    focused = false;
     save();
   }
 
   let isEmpty = $derived(!block?.content?.html || block.content.html === '<br>');
+  let focused = $state(false);
+  let showPlaceholder = $derived(isEmpty && !focused);
 </script>
 
 <div class="toggle-block">
@@ -87,18 +97,21 @@
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
       {/if}
     </button>
-    <div
-      bind:this={el}
-      contenteditable="true"
-      class="block-editor flex-1 text-base-content min-h-[1.5em] outline-none px-1 py-0.5 rounded hover:bg-base-200/50 focus:bg-base-200/50 transition-colors"
-      class:is-empty={isEmpty}
-      tabindex="0"
-      onkeydown={handleKeydown}
-      onblur={handleBlur}
-      role="textbox"
-      aria-multiline="true"
-    >
-      {block?.content?.html ?? ''}
+    <div class="relative flex-1">
+      {#if showPlaceholder}
+        <span class="absolute left-1 top-0.5 pointer-events-none" style="color: hsl(var(--bc) / 0.3); line-height: 1.5rem;">Toggle</span>
+      {/if}
+      <div
+        bind:this={el}
+        contenteditable="true"
+        class={['block-editor text-base-content min-h-[1.5em] outline-none px-1 py-0.5 rounded hover:bg-base-200/50 focus:bg-base-200/50 transition-colors', { 'is-empty': isEmpty }]}
+        tabindex="0"
+        onfocus={() => focused = true}
+        onkeydown={handleKeydown}
+        onblur={handleBlur}
+    role="textbox"
+    aria-multiline="true"
+  ></div>
     </div>
   </div>
   {#if open && children.length > 0}
@@ -116,10 +129,9 @@
     border: none;
     outline: none;
   }
-  .block-editor:empty::before,
-  .block-editor.is-empty::before {
-    content: 'Toggle';
-    color: hsl(var(--bc) / 0.3);
-    pointer-events: none;
+  .block-editor :global(a) {
+    color: hsl(var(--p));
+    text-decoration: underline;
+    cursor: pointer;
   }
 </style>

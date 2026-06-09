@@ -22,7 +22,7 @@
     creating = true;
     try {
       const page = await blockStore.createPage();
-      goto(`/pages/${page.id}`);
+      await goto(`/pages/${page.id}`);
     } catch (e) {
       creating = false;
     }
@@ -40,7 +40,7 @@
       </p>
 
       <div class="badge badge-lg gap-2 mb-8">
-        <span class="w-2 h-2 rounded-full" class:bg-success={health !== 'offline'} class:bg-error={health === 'offline'}></span>
+        <span class={['w-2 h-2 rounded-full', { 'bg-success': health !== 'offline', 'bg-error': health === 'offline' }]}></span>
         API: {health}
       </div>
 

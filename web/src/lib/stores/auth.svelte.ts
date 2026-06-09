@@ -7,13 +7,13 @@ class AuthStore {
   loading = $state(true);
 
   async login(email: string, password: string) {
-    const res = await api.request('POST', '/auth/login', { email, password });
+    const res: any = await api.request('POST', '/auth/login', { email, password });
     this.user = res.user;
     this.accessToken = res.access_token;
   }
 
   async signup(email: string, password: string, name: string) {
-    const res = await api.request('POST', '/auth/signup', { email, password, name });
+    const res: any = await api.request('POST', '/auth/signup', { email, password, name });
     this.user = res.user;
     this.accessToken = res.access_token;
   }
@@ -26,7 +26,7 @@ class AuthStore {
 
   async refresh() {
     try {
-      const res = await api.request('POST', '/auth/refresh');
+      const res: any = await api.requestInner('POST', '/auth/refresh');
       this.accessToken = res.access_token;
       this.user = res.user;
     } catch {

@@ -59,18 +59,20 @@
   function openFilePicker() {
     fileInput?.click();
   }
+
 </script>
 
-<!-- svelte-ignore a11y_no_noninteractive_tabindex a11y_no_noninteractive_element_interactions -->
+<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 <div
   class="image-block group relative my-1 px-1"
   tabindex="0"
-  onkeydown={handleKeydown}
+  role="application"
   aria-label="Image block"
+  onkeydown={handleKeydown}
 >
   {#if block?.content?.url}
     <figure class="relative">
-      <img src={block.content.url} alt="" class="max-w-full rounded-lg" />
+      <img src={block.content.url} alt="" class="w-full rounded-lg min-h-[100px] object-contain bg-base-200" loading="lazy" />
       <button
         onclick={() => blockStore.updateBlock(blockId, { content: {} })}
         class="absolute top-2 right-2 btn btn-ghost btn-xs opacity-0 group-hover:opacity-100 transition-opacity"
@@ -84,12 +86,15 @@
       Uploading...
     </div>
   {:else}
-    <button
+    <div
       onclick={openFilePicker}
-      class="w-full p-8 border-2 border-dashed border-base-300 rounded-lg text-base-content/40 hover:text-base-content/60 hover:border-base-content/40 transition-colors text-sm"
+      onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openFilePicker(); }}}
+      tabindex="0"
+      role="button"
+      class="w-full p-8 border-2 border-dashed border-base-300 rounded-lg text-base-content/40 hover:text-base-content/60 hover:border-base-content/40 transition-colors text-sm cursor-pointer"
     >
       Click to upload an image
-    </button>
+    </div>
   {/if}
   <input
     bind:this={fileInput}

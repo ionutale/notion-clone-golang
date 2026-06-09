@@ -10,8 +10,8 @@
   let block = $derived(blockStore.blocks.get(blockId));
   let title = $derived(block?.content?.title ?? 'Untitled');
 
-  function navigate() {
-    goto(`/pages/${blockId}`);
+  async function navigate() {
+    await goto(`/pages/${blockId}`);
   }
 
   function handleKeydown(e: KeyboardEvent) {

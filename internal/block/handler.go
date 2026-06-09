@@ -2,6 +2,7 @@ package block
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -212,10 +213,13 @@ func (h *Handler) PermanentDelete(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, "invalid id")
 		return
 	}
+	log.Printf("PermanentDelete called for id=%s", id)
 	if err := h.svc.PermanentDelete(r.Context(), id); err != nil {
+		log.Printf("PermanentDelete error: %v", err)
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	log.Printf("PermanentDelete SUCCESS for id=%s", id)
 	w.WriteHeader(http.StatusNoContent)
 }
 

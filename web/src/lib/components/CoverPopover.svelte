@@ -41,26 +41,24 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
 <div
   class="absolute z-50 mt-1 w-72 bg-base-100 border border-base-300 rounded-xl shadow-xl"
+  role="dialog"
+  tabindex="-1"
   onclick={(e) => e.stopPropagation()}
+  onkeydown={handleKeydown}
 >
   <div class="flex border-b border-base-300" role="tablist">
     <button role="tab" aria-selected={tab === 'image'} onclick={() => tab = 'image'}
-      class="flex-1 px-3 py-2 text-sm font-medium transition-colors"
-      class:border-b-2={tab === 'image'} class:border-primary={tab === 'image'}
-      class:text-primary={tab === 'image'}>Image</button>
+      class={['flex-1 px-3 py-2 text-sm font-medium transition-colors', { 'border-b-2': tab === 'image', 'border-primary': tab === 'image', 'text-primary': tab === 'image' }]}>Image</button>
     <button role="tab" aria-selected={tab === 'color'} onclick={() => tab = 'color'}
-      class="flex-1 px-3 py-2 text-sm font-medium transition-colors"
-      class:border-b-2={tab === 'color'} class:border-primary={tab === 'color'}
-      class:text-primary={tab === 'color'}>Color</button>
+      class={['flex-1 px-3 py-2 text-sm font-medium transition-colors', { 'border-b-2': tab === 'color', 'border-primary': tab === 'color', 'text-primary': tab === 'color' }]}>Color</button>
   </div>
 
   <div role="tabpanel" class="p-3">
     {#if tab === 'image'}
       <div class="space-y-3">
-        <label for="cover-upload-input" class="btn btn-outline btn-sm w-full" class:btn-disabled={uploading}>
+        <label for="cover-upload-input" class={['btn btn-outline btn-sm w-full', { 'btn-disabled': uploading }]}>
           {uploading ? 'Uploading...' : 'Upload image'}
         </label>
         <input id="cover-upload-input" type="file" accept="image/*" onchange={handleFileUpload} class="hidden" disabled={uploading} />
@@ -74,11 +72,12 @@
       </div>
     {:else}
       <div class="grid grid-cols-4 gap-2">
-        {#each COLORS as color}
+        {#each COLORS as color (color)}
           <button
             onclick={() => { onselect({ type: 'color', value: color }); onclose(); }}
             class="w-full aspect-video rounded-lg border border-base-300 hover:scale-105 transition-transform"
             style="background-color: {color}"
+            aria-label="Set cover color {color}"
           ></button>
         {/each}
       </div>

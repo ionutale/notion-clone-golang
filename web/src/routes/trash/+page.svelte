@@ -3,14 +3,17 @@
   import { blockStore } from '$lib/stores/blocks.svelte';
   import { goto } from '$app/navigation';
   import type { PageSummary } from '$lib/types';
+  import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 
-  let pages = $state<PageSummary[]>([]);
+  let pages = $state.raw<PageSummary[]>([]);
   let loading = $state(true);
+  let deleteConfirmId = $state<string | null>(null);
+  let showEmptyTrashConfirm = $state(false);
 
   async function loadTrash() {
     loading = true;
     try {
-      pages = await api.request('GET', '/trash');
+      pages = await api.listTrash();
     } catch (e) {
       console.error('Failed to load trash', e);
     } finally {
@@ -24,30 +27,50 @@
   }
 
   async function permanentDelete(id: string) {
-    if (!confirm('Delete this page forever? This cannot be undone.')) return;
     try {
-      await api.request('DELETE', `/blocks/${id}/permanent`);
+      await api.permanentDeleteBlock(id);
       pages = pages.filter(p => p.id !== id);
     } catch (e) {
       console.error('Failed to permanently delete', e);
     }
+    deleteConfirmId = null;
   }
 
   async function emptyTrash() {
-    if (!confirm(`Delete all ${pages.length} pages forever? This cannot be undone.`)) return;
     for (const p of [...pages]) {
       await permanentDelete(p.id);
     }
+    showEmptyTrashConfirm = false;
   }
 
   $effect(() => { loadTrash(); });
 </script>
 
+<ConfirmDialog
+  open={deleteConfirmId !== null}
+  title="Delete forever?"
+  message="Delete this page forever? This cannot be undone."
+  confirmText="Delete forever"
+  variant="danger"
+  onConfirm={() => { if (deleteConfirmId) permanentDelete(deleteConfirmId); }}
+  onCancel={() => deleteConfirmId = null}
+/>
+
+<ConfirmDialog
+  open={showEmptyTrashConfirm}
+  title="Empty trash?"
+  message={`Delete all ${pages.length} pages forever? This cannot be undone.`}
+  confirmText="Empty trash"
+  variant="danger"
+  onConfirm={emptyTrash}
+  onCancel={() => showEmptyTrashConfirm = false}
+/>
+
 <div class="max-w-3xl mx-auto py-8 px-4">
   <div class="flex items-center justify-between mb-6">
     <h1 class="text-2xl font-bold">Trash</h1>
     {#if pages.length > 0}
-      <button onclick={emptyTrash} class="btn btn-ghost btn-sm text-error">Empty trash</button>
+      <button onclick={() => showEmptyTrashConfirm = true} class="btn btn-ghost btn-sm text-error">Empty trash</button>
     {/if}
   </div>
 
@@ -78,7 +101,7 @@
             <p class="text-xs text-base-content/40">Deleted</p>
           </div>
           <button onclick={() => restore(p.id)} class="btn btn-ghost btn-xs opacity-0 group-hover:opacity-100">Restore</button>
-          <button onclick={() => permanentDelete(p.id)} class="btn btn-ghost btn-xs text-error opacity-0 group-hover:opacity-100">Delete forever</button>
+          <button onclick={() => deleteConfirmId = p.id} class="btn btn-ghost btn-xs text-error opacity-0 group-hover:opacity-100">Delete forever</button>
         </div>
       {/each}
     </div>

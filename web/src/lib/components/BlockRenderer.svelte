@@ -12,13 +12,14 @@
   import BlockDragHandle from './BlockDragHandle.svelte';
   import BlockRenderer from './BlockRenderer.svelte';
 
-  let { blockId, depth = 0, listIndex = 0, onSlash, focusBlockId }:
+  let { blockId, depth = 0, listIndex = 0, onSlash, focusBlockId, requestFocus }:
     {
       blockId: string;
       depth?: number;
       listIndex?: number;
       onSlash?: (detail: { blockId: string; position: { x: number; y: number }; isTransform?: boolean }) => void;
       focusBlockId?: string | null;
+      requestFocus?: (id: string | null) => void;
     } = $props();
 
   let block = $derived(blockStore.blocks.get(blockId));
@@ -27,7 +28,7 @@
   let dragOver = $state(false);
 
   function handleEnter() {
-    createBelow();
+    createBelow(block?.type ?? 'text');
   }
 
   function handleBackspace() {
@@ -37,7 +38,9 @@
   async function createBelow(type: string = 'text') {
     const parentId = block?.parent_id ?? null;
     const pos = (block?.position ?? 0) + 1;
-    await blockStore.createBlock(parentId, type as any, { html: '' }, pos);
+    const newBlock = await blockStore.createBlock(parentId, type as any, { html: '' }, pos);
+
+    requestFocus?.(newBlock.id);
   }
 
   async function deleteBlock() {
@@ -160,8 +163,7 @@
 
 {#if block}
   <div
-    class="block-wrapper group relative"
-    class:drag-over={dragOver}
+    class={['block-wrapper group relative', { 'drag-over': dragOver }]}
     onmouseenter={() => hovered = true}
     onmouseleave={() => hovered = false}
     ondragover={handleDragOver}
@@ -211,6 +213,7 @@
                 listIndex={i + 1}
                 {onSlash}
                 {focusBlockId}
+                {requestFocus}
               />
             {/each}
           </div>
@@ -237,7 +240,7 @@
 {/if}
 
 <style>
-  .drag-opacity {
+  :global(.drag-opacity) {
     opacity: 0.4;
   }
 </style>

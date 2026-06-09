@@ -125,11 +125,10 @@ func (s *Service) UpdateProfile(ctx context.Context, id, name, email, currentPas
 		return nil, err
 	}
 
-	if bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(currentPassword)) != nil {
-		return nil, ErrInvalidCredentials
-	}
-
 	if email != "" && email != user.Email {
+		if bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(currentPassword)) != nil {
+			return nil, ErrInvalidCredentials
+		}
 		existing, err := s.repo.GetUserByEmail(ctx, email)
 		if err == nil && existing.ID != id {
 			return nil, ErrEmailTaken

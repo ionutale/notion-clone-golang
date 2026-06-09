@@ -59,17 +59,17 @@
 
 <div
   class="absolute z-50 w-72 rounded-xl shadow-xl border border-base-300 bg-base-100 overflow-hidden"
+  role="dialog"
+  tabindex="-1"
   onclick={(e) => e.stopPropagation()}
+  onkeydown={handleKeydown}
 >
   <div class="flex border-b border-base-200">
     <button
       role="tab"
       aria-selected={tab === 'emoji'}
       aria-controls="icon-tabpanel"
-      class="flex-1 px-4 py-2.5 text-sm font-medium transition-colors"
-      class:text-primary={tab === 'emoji'}
-      class:border-b-2={tab === 'emoji'}
-      class:border-primary={tab === 'emoji'}
+      class={['flex-1 px-4 py-2.5 text-sm font-medium transition-colors', { 'text-primary': tab === 'emoji', 'border-b-2': tab === 'emoji', 'border-primary': tab === 'emoji' }]}
       onclick={() => tab = 'emoji'}
     >
       Emoji
@@ -78,10 +78,7 @@
       role="tab"
       aria-selected={tab === 'image'}
       aria-controls="icon-tabpanel"
-      class="flex-1 px-4 py-2.5 text-sm font-medium transition-colors"
-      class:text-primary={tab === 'image'}
-      class:border-b-2={tab === 'image'}
-      class:border-primary={tab === 'image'}
+      class={['flex-1 px-4 py-2.5 text-sm font-medium transition-colors', { 'text-primary': tab === 'image', 'border-b-2': tab === 'image', 'border-primary': tab === 'image' }]}
       onclick={() => tab = 'image'}
     >
       Image
@@ -91,7 +88,7 @@
   <div role="tabpanel" id="icon-tabpanel" class="p-3">
     {#if tab === 'emoji'}
       <div class="grid grid-cols-5 gap-1">
-        {#each emojis as emoji}
+        {#each emojis as emoji (emoji)}
           <button
             class="w-10 h-10 flex items-center justify-center text-lg rounded-lg hover:bg-base-200 transition-colors"
             onclick={() => selectEmoji(emoji)}
@@ -102,7 +99,7 @@
       </div>
     {:else}
       <div class="space-y-3">
-        <label for="icon-upload-input" class="btn btn-outline btn-sm w-full" class:btn-disabled={uploading}>
+        <label for="icon-upload-input" class={['btn btn-outline btn-sm w-full', { 'btn-disabled': uploading }]}>
           {uploading ? 'Uploading...' : 'Upload image'}
         </label>
         <input id="icon-upload-input" type="file" accept="image/*" onchange={handleUpload} class="hidden" disabled={uploading} />

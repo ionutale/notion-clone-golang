@@ -1,8 +1,9 @@
 import { api } from '$lib/api';
 import type { Block, BlockType } from '$lib/types';
+import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 
 class BlockStore {
-  blocks = $state<Map<string, Block>>(new Map());
+  blocks = $state<SvelteMap<string, Block>>(new SvelteMap());
   pageId = $state<string | null>(null);
   pageTitle = $state<string>('');
   pageIcon = $derived(this.blocks.get(this.pageId ?? '')?.content?.icon ?? null);
@@ -12,10 +13,10 @@ class BlockStore {
   pageCoverColor = $derived(this.blocks.get(this.pageId ?? '')?.content?.cover_color ?? '#e5e7eb');
   loading = $state(false);
   error = $state<string | null>(null);
-  favoriteIds = $state<Set<string>>(new Set());
+  favoriteIds = $state<SvelteSet<string>>(new SvelteSet());
 
   childrenMap = $derived.by(() => {
-    const map = new Map<string | null, string[]>();
+    const map = new SvelteMap<string | null, string[]>();
     for (const block of this.blocks.values()) {
       const pid = block.parent_id;
       if (!map.has(pid)) map.set(pid, []);
@@ -40,7 +41,7 @@ class BlockStore {
       const { page, blocks } = await api.getPageTree(id);
       this.pageId = id;
       this.pageTitle = page.content?.title ?? 'Untitled';
-      const map = new Map<string, Block>();
+      const map = new SvelteMap<string, Block>();
       map.set(page.id, page);
       for (const b of blocks) map.set(b.id, b);
       this.blocks = map;
@@ -58,20 +59,20 @@ class BlockStore {
     position?: number
   ): Promise<Block> {
     const block = await api.createBlock(parentId ?? this.pageId!, type, content, position);
-    this.blocks = new Map(this.blocks).set(block.id, block);
+    this.blocks = new SvelteMap(this.blocks).set(block.id, block);
     return block;
   }
 
   async updateBlock(id: string, data: { content?: any; type?: BlockType }): Promise<Block> {
     const updated = await api.updateBlock(id, data);
-    this.blocks = new Map(this.blocks).set(id, updated);
+    this.blocks = new SvelteMap(this.blocks).set(id, updated);
     return updated;
   }
 
   async updateCover(cover: string | null, coverType: string, coverColor?: string): Promise<Block | undefined> {
     const block = this.blocks.get(this.pageId ?? '');
     if (!block) return;
-    const content = { ...block.content, cover, cover_type: coverType };
+    const content: Record<string, unknown> = { ...block.content, cover, cover_type: coverType };
     if (coverColor) content.cover_color = coverColor;
     if (cover === null) {
       delete content.cover;
@@ -84,7 +85,7 @@ class BlockStore {
   async updateIcon(icon: string | null, iconType: string | null): Promise<Block> {
     const block = this.blocks.get(this.pageId ?? '');
     if (!block) throw new Error('Page block not found');
-    const content = { ...block.content, icon, icon_type: iconType };
+    const content: Record<string, unknown> = { ...block.content, icon, icon_type: iconType };
     if (icon === null) {
       delete content.icon;
       delete content.icon_type;
@@ -95,7 +96,7 @@ class BlockStore {
   async deleteBlock(id: string): Promise<Block> {
     const block = this.blocks.get(id)!;
     await api.deleteBlock(id);
-    const next = new Map(this.blocks);
+    const next = new SvelteMap(this.blocks);
     next.delete(id);
     this.blocks = next;
     return block;
@@ -103,12 +104,12 @@ class BlockStore {
 
   async restoreBlock(id: string) {
     const restored = await api.restoreBlock(id);
-    this.blocks = new Map(this.blocks).set(id, restored);
+    this.blocks = new SvelteMap(this.blocks).set(id, restored);
   }
 
   async moveBlock(id: string, parentId: string | null, position: number) {
     const moved = await api.moveBlock(id, parentId, position);
-    this.blocks = new Map(this.blocks).set(id, moved);
+    this.blocks = new SvelteMap(this.blocks).set(id, moved);
   }
 
   createPage(title = 'Untitled'): Promise<Block> {
@@ -121,7 +122,7 @@ class BlockStore {
 
   async loadFavorites() {
     const pages = await api.listFavorites();
-    this.favoriteIds = new Set(pages.map(p => p.id));
+    this.favoriteIds = new SvelteSet(pages.map(p => p.id));
   }
 
   async toggleFavorite(blockId: string) {
@@ -129,9 +130,9 @@ class BlockStore {
     const currentlyFavorited = this.favoriteIds.has(blockId);
     // Optimistic update
     if (currentlyFavorited) {
-      this.favoriteIds = new Set([...this.favoriteIds].filter(id => id !== blockId));
+      this.favoriteIds = new SvelteSet([...this.favoriteIds].filter(id => id !== blockId));
     } else {
-      this.favoriteIds = new Set([...this.favoriteIds, blockId]);
+      this.favoriteIds = new SvelteSet([...this.favoriteIds, blockId]);
     }
     if (block) {
       await this.updateBlock(blockId, { content: { ...block.content, favorited: !currentlyFavorited } });
@@ -141,7 +142,8 @@ class BlockStore {
   }
 
   clear() {
-    this.blocks = new Map();
+    this.blocks = new SvelteMap();
+    this.favoriteIds = new SvelteSet();
     this.pageId = null;
     this.pageTitle = '';
     this.loading = false;

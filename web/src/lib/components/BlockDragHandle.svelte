@@ -57,8 +57,7 @@
     ontouchstart={handleTouchStart}
     ontouchmove={handleTouchMove}
     ontouchend={handleTouchEnd}
-    class="drag-handle cursor-grab active:cursor-grabbing text-base-content/20 hover:text-base-content/40 transition-colors px-0.5 select-none inline-flex"
-    class:opacity-50={draggingViaTouch}
+    class={['drag-handle cursor-grab active:cursor-grabbing text-base-content/20 hover:text-base-content/40 transition-colors px-0.5 select-none inline-flex', { 'opacity-50': draggingViaTouch }]}
     role="button"
     tabindex="-1"
     aria-label="Drag to reorder"

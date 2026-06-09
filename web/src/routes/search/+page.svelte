@@ -1,25 +1,25 @@
 <script lang="ts">
   import { api } from '$lib/api';
   import { goto } from '$app/navigation';
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import type { SearchResult } from '$lib/types';
 
-  let query = $state($page.url.searchParams.get('q') || '');
-  let results = $state<SearchResult[]>([]);
+  let query = $state(page.url.searchParams.get('q') || '');
+  let results = $state.raw<SearchResult[]>([]);
   let loading = $state(false);
   let searched = $state(false);
   let error = $state<string | null>(null);
 
   let debounceTimer: ReturnType<typeof setTimeout>;
 
-  function doSearch(q: string) {
+  async function doSearch(q: string) {
     if (!q.trim()) {
       results = [];
       searched = false;
       return;
     }
 
-    goto(`/search?q=${encodeURIComponent(q)}`, { replaceState: true, keepFocus: true });
+    await goto(`/search?q=${encodeURIComponent(q)}`, { replaceState: true, keepFocus: true });
 
     loading = true;
     error = null;
@@ -52,7 +52,7 @@
   }
 
   $effect(() => {
-    const q = $page.url.searchParams.get('q') || '';
+    const q = page.url.searchParams.get('q') || '';
     if (q) {
       query = q;
       doSearch(q);
@@ -73,6 +73,7 @@
 
 <div class="max-w-3xl mx-auto py-8 px-4">
   <div class="mb-6">
+    <!-- svelte-ignore a11y_autofocus -->
     <input
       type="search"
       placeholder="Search across all pages..."

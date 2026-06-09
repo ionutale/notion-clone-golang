@@ -58,11 +58,36 @@
   async function handlePageKeydown(e: KeyboardEvent) {
     if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
       e.preventDefault();
-      goto('/search');
+      await goto('/search');
     }
     if (e.key === 'Escape') {
       slashMenu = null;
     }
+  }
+
+  let titleInput = $state('');
+
+  $effect(() => {
+    titleInput = blockStore.pageTitle;
+  });
+
+  function handleTitleBlur() {
+    const newTitle = titleInput.trim() || 'Untitled';
+    const pageBlock = blockStore.blocks.get(pageId);
+    if (pageBlock && newTitle !== blockStore.pageTitle) {
+      blockStore.updateBlock(pageId, { content: { ...pageBlock.content, title: newTitle } });
+    }
+  }
+
+  function handleTitleKeydown(e: KeyboardEvent) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      (e.currentTarget as HTMLInputElement)?.blur();
+    }
+  }
+
+  function requestFocus(id: string | null) {
+    focusBlockId = id;
   }
 
   async function addBlockAtBottom() {
@@ -94,15 +119,15 @@
           <div class="w-full h-full rounded-t-xl" style="background-color: {blockStore.pageCoverColor}"></div>
         {/if}
         <button
-          onclick={() => showCoverPicker = !showCoverPicker}
-          class="absolute top-2 right-2 btn btn-ghost btn-xs bg-base-100/80 hover:bg-base-100 opacity-0 group-hover:opacity-100 transition-opacity"
+        onclick={(e) => { e.stopPropagation(); showCoverPicker = !showCoverPicker; }}
+        class="absolute top-2 right-2 btn btn-ghost btn-xs bg-base-100/80 hover:bg-base-100 opacity-0 group-hover:opacity-100 transition-opacity"
         >
           Change cover
         </button>
       </div>
     {:else}
       <button
-        onclick={() => showCoverPicker = !showCoverPicker}
+        onclick={(e) => { e.stopPropagation(); showCoverPicker = !showCoverPicker; }}
         class="w-full h-12 mb-4 -mx-4 -mt-8 flex items-center justify-center text-sm text-base-content/30 hover:text-base-content/50 hover:bg-base-200/50 transition-colors rounded-t-xl"
       >
         Add cover
@@ -133,7 +158,7 @@
       <div class="relative">
         {#if blockStore.pageIcon}
           <button
-            onclick={() => showIconPicker = !showIconPicker}
+            onclick={(e) => { e.stopPropagation(); showIconPicker = !showIconPicker; }}
             class="shrink-0 w-12 h-12 flex items-center justify-center text-4xl rounded-xl hover:bg-base-200 transition-colors"
           >
             {#if blockStore.pageIconType === 'image'}
@@ -144,7 +169,7 @@
           </button>
         {:else}
           <button
-            onclick={() => showIconPicker = !showIconPicker}
+            onclick={(e) => { e.stopPropagation(); showIconPicker = !showIconPicker; }}
             class="shrink-0 w-12 h-12 flex items-center justify-center text-2xl rounded-xl hover:bg-base-200 transition-colors text-base-content/20 hover:text-base-content/40"
           >
             +
@@ -164,13 +189,17 @@
           />
         {/if}
       </div>
-      <h1 class="text-4xl font-bold text-base-content outline-none flex-1 min-w-0">
-        {blockStore.pageTitle}
-      </h1>
+      <input
+        type="text"
+        bind:value={titleInput}
+        class="text-4xl font-bold text-base-content outline-none flex-1 min-w-0 bg-transparent border-none p-0"
+        onblur={handleTitleBlur}
+        onkeydown={handleTitleKeydown}
+        aria-label="Page title"
+      />
       <button
         onclick={async () => await blockStore.toggleFavorite(pageId)}
-        class="btn btn-ghost btn-sm px-2 shrink-0"
-        class:text-warning={blockStore.favoriteIds.has(pageId)}
+        class={['btn btn-ghost btn-sm px-2 shrink-0', { 'text-warning': blockStore.favoriteIds.has(pageId) }]}
         title={blockStore.favoriteIds.has(pageId) ? 'Remove from favorites' : 'Add to favorites'}
       >
         <svg class="w-5 h-5" fill={blockStore.favoriteIds.has(pageId) ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
@@ -187,6 +216,7 @@
         <BlockRenderer
           {blockId}
           {focusBlockId}
+          {requestFocus}
           onSlash={handleSlash}
         />
       {/each}
