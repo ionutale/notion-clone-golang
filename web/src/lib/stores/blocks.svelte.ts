@@ -59,13 +59,13 @@ class BlockStore {
     position?: number
   ): Promise<Block> {
     const block = await api.createBlock(parentId ?? this.pageId!, type, content, position);
-    this.blocks = new SvelteMap(this.blocks).set(block.id, block);
+    this.blocks.set(block.id, block);
     return block;
   }
 
   async updateBlock(id: string, data: { content?: any; type?: BlockType }): Promise<Block> {
     const updated = await api.updateBlock(id, data);
-    this.blocks = new SvelteMap(this.blocks).set(id, updated);
+    this.blocks.set(id, updated);
     return updated;
   }
 
@@ -96,20 +96,18 @@ class BlockStore {
   async deleteBlock(id: string): Promise<Block> {
     const block = this.blocks.get(id)!;
     await api.deleteBlock(id);
-    const next = new SvelteMap(this.blocks);
-    next.delete(id);
-    this.blocks = next;
+    this.blocks.delete(id);
     return block;
   }
 
   async restoreBlock(id: string) {
     const restored = await api.restoreBlock(id);
-    this.blocks = new SvelteMap(this.blocks).set(id, restored);
+    this.blocks.set(id, restored);
   }
 
   async moveBlock(id: string, parentId: string | null, position: number) {
     const moved = await api.moveBlock(id, parentId, position);
-    this.blocks = new SvelteMap(this.blocks).set(id, moved);
+    this.blocks.set(id, moved);
   }
 
   createPage(title = 'Untitled'): Promise<Block> {
@@ -149,6 +147,7 @@ class BlockStore {
     this.loading = false;
     this.error = null;
   }
+}
 }
 
 export const blockStore = new BlockStore();
