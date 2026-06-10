@@ -23,29 +23,27 @@ func NewService(pool *pgxpool.Pool) *Service {
 
 func (s *Service) CreatePage(ctx context.Context, workspaceID, userID uuid.UUID, title string) (Block, error) {
 	content, _ := json.Marshal(map[string]string{"title": title})
-	block := Block{
+	page := Block{
 		WorkspaceID: workspaceID,
 		Type:        TypePage,
 		Content:     content,
 		CreatedBy:   &userID,
-	}
-	if err := s.repo.Create(ctx, &block); err != nil {
-		return Block{}, fmt.Errorf("create page: %w", err)
+		Position:    1 << 31,
 	}
 
 	initialContent, _ := json.Marshal(map[string]string{"html": ""})
 	initial := Block{
 		WorkspaceID: workspaceID,
-		ParentID:    &block.ID,
 		Type:        TypeText,
 		Content:     initialContent,
 		CreatedBy:   &userID,
-	}
-	if err := s.repo.Create(ctx, &initial); err != nil {
-		return Block{}, fmt.Errorf("create initial block: %w", err)
+		Position:    1 << 31,
 	}
 
-	return block, nil
+	if err := s.repo.CreatePageWithInitial(ctx, &page, &initial); err != nil {
+		return Block{}, fmt.Errorf("create page: %w", err)
+	}
+	return page, nil
 }
 
 func (s *Service) GetPageTree(ctx context.Context, pageID uuid.UUID) (PageTree, error) {
@@ -220,11 +218,6 @@ func (s *Service) SplitBlock(ctx context.Context, workspaceID, userID uuid.UUID,
 		return Block{}, Block{}, fmt.Errorf("marshal right content: %w", err)
 	}
 
-	updated, err := s.repo.Update(ctx, id, UpdateBlockRequest{Content: leftContent})
-	if err != nil {
-		return Block{}, Block{}, fmt.Errorf("update original: %w", err)
-	}
-
 	newBlock := Block{
 		WorkspaceID: workspaceID,
 		ParentID:    original.ParentID,
@@ -232,8 +225,10 @@ func (s *Service) SplitBlock(ctx context.Context, workspaceID, userID uuid.UUID,
 		Content:     rightContent,
 		CreatedBy:   &userID,
 	}
-	if err := s.repo.Create(ctx, &newBlock); err != nil {
-		return Block{}, Block{}, fmt.Errorf("create new block: %w", err)
+
+	updated, err := s.repo.SplitBlockTx(ctx, id, leftContent, &newBlock)
+	if err != nil {
+		return Block{}, Block{}, fmt.Errorf("split block: %w", err)
 	}
 
 	return updated, newBlock, nil
@@ -284,13 +279,9 @@ func (s *Service) MergeBlocks(ctx context.Context, sourceID, targetID uuid.UUID)
 		return Block{}, fmt.Errorf("marshal merged content: %w", err)
 	}
 
-	updated, err := s.repo.Update(ctx, targetID, UpdateBlockRequest{Content: mergedContent})
+	updated, err := s.repo.MergeBlocksTx(ctx, targetID, mergedContent, sourceID)
 	if err != nil {
-		return Block{}, fmt.Errorf("merge content: %w", err)
-	}
-
-	if err := s.repo.SoftDelete(ctx, sourceID); err != nil {
-		return Block{}, fmt.Errorf("delete source: %w", err)
+		return Block{}, fmt.Errorf("merge blocks: %w", err)
 	}
 
 	return updated, nil

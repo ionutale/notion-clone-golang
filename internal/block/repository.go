@@ -408,6 +408,140 @@ func (r *Repository) ListTrash(ctx context.Context, workspaceID uuid.UUID, curso
 	return pages, nextCursor, nil
 }
 
+func (r *Repository) CreatePageWithInitial(ctx context.Context, page *Block, initial *Block) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	page.ID = uuid.New()
+	now := time.Now()
+	page.CreatedAt = now
+	page.UpdatedAt = now
+	page.Path = strPtr(page.ID.String())
+
+	_, err = tx.Exec(ctx, `
+		INSERT INTO blocks (id, workspace_id, parent_id, type, content, position, path, created_by, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7::ltree, $8, $9, $10)`,
+		page.ID, page.WorkspaceID, page.ParentID, page.Type, page.Content, page.Position, *page.Path, page.CreatedBy, page.CreatedAt, page.UpdatedAt)
+	if err != nil {
+		return err
+	}
+
+	initial.ID = uuid.New()
+	initial.CreatedAt = now
+	initial.UpdatedAt = now
+	initial.ParentID = &page.ID
+	initial.Path = strPtr(page.ID.String() + "." + initial.ID.String())
+
+	_, err = tx.Exec(ctx, `
+		INSERT INTO blocks (id, workspace_id, parent_id, type, content, position, path, created_by, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7::ltree, $8, $9, $10)`,
+		initial.ID, initial.WorkspaceID, initial.ParentID, initial.Type, initial.Content, initial.Position, *initial.Path, initial.CreatedBy, initial.CreatedAt, initial.UpdatedAt)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
+}
+
+func (r *Repository) SplitBlockTx(ctx context.Context, originalID uuid.UUID, leftContent json.RawMessage, newBlock *Block) (Block, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return Block{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	_, err = tx.Exec(ctx, `UPDATE blocks SET content = $1, updated_at = now() WHERE id = $2 AND deleted_at IS NULL`,
+		leftContent, originalID)
+	if err != nil {
+		return Block{}, err
+	}
+
+	newBlock.ID = uuid.New()
+	now := time.Now()
+	newBlock.CreatedAt = now
+	newBlock.UpdatedAt = now
+	if newBlock.Position == 0 {
+		newBlock.Position = 1 << 31
+	}
+
+	var path *string
+	if newBlock.ParentID != nil {
+		var parentPath string
+		err := tx.QueryRow(ctx, `SELECT path::text FROM blocks WHERE id = $1`, *newBlock.ParentID).Scan(&parentPath)
+		if err == nil {
+			p := parentPath + "." + newBlock.ID.String()
+			path = &p
+		}
+	}
+	if path == nil {
+		p := newBlock.ID.String()
+		path = &p
+	}
+	newBlock.Path = path
+
+	_, err = tx.Exec(ctx, `
+		INSERT INTO blocks (id, workspace_id, parent_id, type, content, position, path, created_by, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7::ltree, $8, $9, $10)`,
+		newBlock.ID, newBlock.WorkspaceID, newBlock.ParentID, newBlock.Type, newBlock.Content, newBlock.Position, *newBlock.Path, newBlock.CreatedBy, newBlock.CreatedAt, newBlock.UpdatedAt)
+	if err != nil {
+		return Block{}, err
+	}
+
+	updated := Block{}
+	err = tx.QueryRow(ctx, `
+		SELECT id, workspace_id, parent_id, type, content, position, path::text, created_by, created_at, updated_at, deleted_at
+		FROM blocks WHERE id = $1`, originalID).Scan(
+		&updated.ID, &updated.WorkspaceID, &updated.ParentID, &updated.Type, &updated.Content,
+		&updated.Position, &updated.Path, &updated.CreatedBy, &updated.CreatedAt, &updated.UpdatedAt, &updated.DeletedAt)
+	if err != nil {
+		return Block{}, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return Block{}, err
+	}
+	return updated, nil
+}
+
+func (r *Repository) MergeBlocksTx(ctx context.Context, targetID uuid.UUID, mergedContent json.RawMessage, sourceID uuid.UUID) (Block, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return Block{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	_, err = tx.Exec(ctx, `UPDATE blocks SET content = $1, updated_at = now() WHERE id = $2 AND deleted_at IS NULL`,
+		mergedContent, targetID)
+	if err != nil {
+		return Block{}, err
+	}
+
+	_, err = tx.Exec(ctx, `UPDATE blocks SET deleted_at = now(), updated_at = now() WHERE id = $1 AND deleted_at IS NULL`, sourceID)
+	if err != nil {
+		return Block{}, err
+	}
+
+	updated := Block{}
+	err = tx.QueryRow(ctx, `
+		SELECT id, workspace_id, parent_id, type, content, position, path::text, created_by, created_at, updated_at, deleted_at
+		FROM blocks WHERE id = $1`, targetID).Scan(
+		&updated.ID, &updated.WorkspaceID, &updated.ParentID, &updated.Type, &updated.Content,
+		&updated.Position, &updated.Path, &updated.CreatedBy, &updated.CreatedAt, &updated.UpdatedAt, &updated.DeletedAt)
+	if err != nil {
+		return Block{}, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return Block{}, err
+	}
+	return updated, nil
+}
+
+func strPtr(s string) *string { return &s }
+
 func (r *Repository) CleanupExpired(ctx context.Context, workspaceID *uuid.UUID, days int) error {
 	var err error
 	if workspaceID != nil {
