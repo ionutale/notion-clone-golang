@@ -148,6 +148,4 @@ class BlockStore {
     this.error = null;
   }
 }
-}
-
 export const blockStore = new BlockStore();

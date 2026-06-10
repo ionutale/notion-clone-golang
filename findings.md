@@ -69,6 +69,22 @@ This section documents the fixes implemented after the review.
 | 25 | 🟠 High | Position race condition | ✅ Fixed — FOR UPDATE in transaction |
 | 26 | 🟠 High | Refresh token stored as string | ✅ Fixed — parsed as time.Time |
 | 27 | 🟠 High | No .env.example | ✅ Fixed — created |
+| 28 | 🟠 High | Unbounded queries on ListPages/ListFavorites/ListTrash | ✅ Fixed — cursor-based pagination |
+| 29 | 🟠 High | Missing `refresh_tokens(token_hash)` index | ✅ Fixed — migration 000005 |
+| 30 | 🟠 High | Missing `blocks(workspace_id, parent_id, position)` index | ✅ Fixed — migration 000005 |
+| 31 | 🟠 High | Missing `users(email)` index | ✅ Fixed — migration 000005 |
+| 32 | 🟠 High | No gzip compression on responses | ✅ Fixed — chimw.Compress(5) middleware |
+| 33 | 🟠 High | No Cache-Control on SPA static assets | ✅ Fixed — immutable cache for hashed assets |
+| 34 | 🟠 High | `CleanupExpired` DELETE on every trash listing | ✅ Fixed — background goroutine (hourly ticker) |
+| 35 | 🟠 High | `CreatePage` no transaction (orphan risk) | ✅ Fixed — `CreatePageWithInitial` in single tx |
+| 36 | 🟠 High | `SplitBlock` no transaction (partial updates) | ✅ Fixed — `SplitBlockTx` in single tx |
+| 37 | 🟠 High | `MergeBlocks` no transaction (data duplication) | ✅ Fixed — `MergeBlocksTx` in single tx |
+| 38 | 🟠 High | MoveBlock TOCTOU race + in-memory sibling load | ✅ Fixed — SQL CTE with FOR UPDATE |
+| 39 | 🟠 High | Svelte blocks store full-map replacement on every mutation | ✅ Fixed — granular SvelteMap.set/delete |
+| 40 | 🔴 Critical | `childrenMap` re-derives ALL blocks on every mutation | ✅ Fixed — granular mutations prevent full re-derivation |
+| 41 | 🟠 High | Duplicate `loadFavorites()` calls on page nav | ✅ Fixed — Editor reads from Sidebar-populated store |
+| 42 | 🟠 High | Login/signup request waterfall (5-6 sequential API calls) | ✅ Fixed — fire workspaceStore.load() in parallel |
+| 43 | 🟠 High | Deprecated `document.execCommand()` in 6 components | ✅ Fixed — centralized `format.ts` utility with try/catch |
 
 ---
 
