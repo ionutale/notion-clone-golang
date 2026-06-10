@@ -13,7 +13,7 @@
   async function loadTrash() {
     loading = true;
     try {
-      pages = await api.listTrash();
+      pages = await api.listAllTrash();
     } catch (e) {
       console.error('Failed to load trash', e);
     } finally {
