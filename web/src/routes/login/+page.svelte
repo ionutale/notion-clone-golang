@@ -14,7 +14,7 @@
     loading = true;
     try {
       await authStore.login(email, password);
-      await workspaceStore.load();
+      workspaceStore.load();
       await goto('/');
     } catch (err: any) {
       error = err.message ?? 'Login failed';

@@ -31,7 +31,6 @@
   $effect(() => {
     if (pageId) {
       blockStore.loadPage(pageId);
-      blockStore.loadFavorites();
       showIconPicker = false;
       focusBlockId = null;
     }
