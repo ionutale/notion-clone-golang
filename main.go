@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
@@ -78,6 +79,10 @@ func spaHandler(fsys fs.FS) http.HandlerFunc {
 			}
 		}
 
+		if strings.HasPrefix(path, "_app/immutable/") {
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		}
+
 		w.Write(data)
 	}
 }
@@ -111,7 +116,9 @@ func (a *wsCreatorAdapter) Create(ctx context.Context, name, ownerID string) (in
 }
 
 func main() {
-	godotenv.Load()
+	if err := godotenv.Load(); err != nil && !os.IsNotExist(err) {
+		slog.Warn("error loading .env file", "error", err)
+	}
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -119,10 +126,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	ctx := context.Background()
+	migrateCtx, migrateCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer migrateCancel()
 
 	var pool *pgxpool.Pool
-	pool, err = db.Connect(ctx, cfg.DatabaseURL)
+	pool, err = db.Connect(migrateCtx, cfg.DatabaseURL)
 	if err != nil {
 		slog.Warn("database not available, starting without db", "error", err)
 	} else {
@@ -141,6 +149,7 @@ func main() {
 	var wsSvc *ws.Service
 	if pool != nil {
 		blockSvc = block.NewService(pool)
+		blockSvc.StartCleanupLoop(context.Background(), 1*time.Hour, 30)
 		wsRepo := ws.NewRepository(pool)
 		wsSvc = ws.NewService(wsRepo)
 		authRepo := auth.NewRepository(pool)
@@ -159,26 +168,50 @@ func main() {
 
 	r.Use(chimw.RequestID)
 	r.Use(chimw.RealIP)
+	r.Use(chimw.Compress(5))
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recovery)
+
+	var corsOrigins []string
+	if cfg.DevMode {
+		corsOrigins = []string{"http://localhost:5173", "http://localhost:8080"}
+		if envOrigins := os.Getenv("CORS_ORIGINS"); envOrigins != "" {
+			corsOrigins = strings.Fields(envOrigins)
+		}
+	} else if origin := os.Getenv("APP_URL"); origin != "" {
+		corsOrigins = []string{origin}
+	}
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"*"},
+		AllowedOrigins:   corsOrigins,
 		AllowedMethods:   []string{"GET", "POST", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Content-Type", "Authorization"},
 		AllowCredentials: true,
 	}))
 
+	r.Use(middleware.SecurityHeaders(cfg.DevMode))
+
 	// Serve uploaded files
 	uploadsDir := "./data/uploads"
 	r.Route("/uploads", func(r chi.Router) {
 		r.Get("/*", func(w http.ResponseWriter, r *http.Request) {
-			filePath := filepath.Join(uploadsDir, chi.URLParam(r, "*"))
+			requestedPath := chi.URLParam(r, "*")
+			if strings.Contains(requestedPath, "..") {
+				http.Error(w, `{"error":"invalid path"}`, http.StatusBadRequest)
+				return
+			}
+			cleanPath := filepath.Clean("/" + requestedPath)
+			filePath := filepath.Join(uploadsDir, cleanPath)
+			if !strings.HasPrefix(filePath, filepath.Clean(uploadsDir)+string(filepath.Separator)) &&
+				filePath != filepath.Clean(uploadsDir) {
+				http.Error(w, `{"error":"access denied"}`, http.StatusForbidden)
+				return
+			}
 			http.ServeFile(w, r, filePath)
 		})
 	})
 
 	if blockSvc != nil {
-		internal.MountAPI(r, blockSvc, fileStore, authSvc, wsSvc)
+		internal.MountAPI(r, blockSvc, fileStore, authSvc, wsSvc, cfg.DevMode)
 	} else {
 		r.Route("/api/v1", func(r chi.Router) {
 			r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -189,7 +222,11 @@ func main() {
 	}
 
 	if cfg.DevMode {
-		target, _ := url.Parse("http://localhost:5173")
+		target, err := url.Parse("http://localhost:5173")
+		if err != nil {
+			slog.Error("failed to parse dev proxy target", "error", err)
+			os.Exit(1)
+		}
 		proxy := httputil.NewSingleHostReverseProxy(target)
 		r.Get("/*", func(w http.ResponseWriter, r *http.Request) {
 			proxy.ServeHTTP(w, r)
@@ -204,8 +241,11 @@ func main() {
 	}
 
 	server := &http.Server{
-		Addr:    ":" + cfg.Port,
-		Handler: r,
+		Addr:         ":" + cfg.Port,
+		Handler:      r,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  60 * time.Second,
 	}
 
 	quit := make(chan os.Signal, 1)
@@ -221,5 +261,9 @@ func main() {
 
 	<-quit
 	slog.Info("shutting down...")
-	server.Shutdown(ctx)
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		slog.Error("server shutdown error", "error", err)
+	}
 }

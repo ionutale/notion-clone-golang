@@ -2,11 +2,15 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 )
+
+var ErrInvalidKey = errors.New("invalid storage key")
 
 type FileStore interface {
 	Put(ctx context.Context, key string, reader io.Reader) error
@@ -21,13 +25,34 @@ type LocalFileStore struct {
 }
 
 func NewLocalFileStore(dir, urlPrefix string) *LocalFileStore {
-	os.MkdirAll(dir, 0755)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		panic(fmt.Sprintf("failed to create storage dir %s: %v", dir, err))
+	}
 	return &LocalFileStore{dir: dir, prefix: urlPrefix}
 }
 
+func (s *LocalFileStore) validateKey(key string) error {
+	if key == "" || strings.Contains(key, "..") || strings.Contains(key, "/") || strings.Contains(key, "\\") {
+		return ErrInvalidKey
+	}
+	return nil
+}
+
+func (s *LocalFileStore) safePath(key string) (string, error) {
+	if err := s.validateKey(key); err != nil {
+		return "", err
+	}
+	return filepath.Join(s.dir, key), nil
+}
+
 func (s *LocalFileStore) Put(ctx context.Context, key string, reader io.Reader) error {
-	path := filepath.Join(s.dir, key)
-	os.MkdirAll(filepath.Dir(path), 0755)
+	path, err := s.safePath(key)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
 	f, err := os.Create(path)
 	if err != nil {
 		return err
@@ -38,11 +63,19 @@ func (s *LocalFileStore) Put(ctx context.Context, key string, reader io.Reader) 
 }
 
 func (s *LocalFileStore) Get(ctx context.Context, key string) (io.ReadCloser, error) {
-	return os.Open(filepath.Join(s.dir, key))
+	path, err := s.safePath(key)
+	if err != nil {
+		return nil, err
+	}
+	return os.Open(path)
 }
 
 func (s *LocalFileStore) Delete(ctx context.Context, key string) error {
-	return os.Remove(filepath.Join(s.dir, key))
+	path, err := s.safePath(key)
+	if err != nil {
+		return err
+	}
+	return os.Remove(path)
 }
 
 func (s *LocalFileStore) PublicURL(key string) string {

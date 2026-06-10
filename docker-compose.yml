@@ -37,6 +37,8 @@ services:
       PORT: "8080"
       STORAGE_EMULATOR_HOST: http://file-storage-bucket:4443
       JWT_SECRET: development-jwt-secret-change-in-production
+    volumes:
+      - ./data/uploads:/app/data/uploads
     depends_on:
       db:
         condition: service_healthy

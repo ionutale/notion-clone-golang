@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -25,6 +26,7 @@ func AuthMiddleware(validator TokenValidator) func(http.Handler) http.Handler {
 			token := strings.TrimPrefix(authHeader, "Bearer ")
 			userID, err := validator.ValidateToken(token)
 			if err != nil {
+				slog.Warn("auth failure", "error", err, "path", r.URL.Path)
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusUnauthorized)
 				w.Write([]byte(`{"error":"invalid token"}`))

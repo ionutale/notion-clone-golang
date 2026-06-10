@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -160,12 +162,28 @@ func (s *Service) Search(ctx context.Context, workspaceID uuid.UUID, query strin
 	return s.repo.Search(ctx, workspaceID, query, limit, offset)
 }
 
+func (s *Service) StartCleanupLoop(ctx context.Context, interval time.Duration, days int) {
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				if err := s.repo.CleanupExpired(ctx, nil, days); err != nil {
+					slog.Error("background cleanup failed", "error", err)
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+}
+
 func (s *Service) ListFavorites(ctx context.Context, workspaceID uuid.UUID) ([]PageSummary, error) {
 	return s.repo.ListFavorites(ctx, workspaceID)
 }
 
 func (s *Service) ListTrash(ctx context.Context, workspaceID uuid.UUID) ([]PageSummary, error) {
-	_ = s.repo.CleanupExpired(ctx, workspaceID, 30)
 	return s.repo.ListTrash(ctx, workspaceID)
 }
 
@@ -189,14 +207,18 @@ func (s *Service) SplitBlock(ctx context.Context, workspaceID, userID uuid.UUID,
 		return Block{}, Block{}, fmt.Errorf("no rich_text in content")
 	}
 
-	leftText := richText[:splitPosition]
-	rightText := richText[splitPosition:]
+	leftText := append([]interface{}{}, richText[:splitPosition]...)
+	rightText := append([]interface{}{}, richText[splitPosition:]...)
 
-	content["rich_text"] = leftText
-	leftContent, _ := json.Marshal(content)
+	leftContent, err := json.Marshal(mergeMaps(content, map[string]interface{}{"rich_text": leftText}))
+	if err != nil {
+		return Block{}, Block{}, fmt.Errorf("marshal left content: %w", err)
+	}
 
-	content["rich_text"] = rightText
-	rightContent, _ := json.Marshal(content)
+	rightContent, err := json.Marshal(mergeMaps(content, map[string]interface{}{"rich_text": rightText}))
+	if err != nil {
+		return Block{}, Block{}, fmt.Errorf("marshal right content: %w", err)
+	}
 
 	updated, err := s.repo.Update(ctx, id, UpdateBlockRequest{Content: leftContent})
 	if err != nil {
@@ -214,9 +236,18 @@ func (s *Service) SplitBlock(ctx context.Context, workspaceID, userID uuid.UUID,
 		return Block{}, Block{}, fmt.Errorf("create new block: %w", err)
 	}
 
-	_, _ = s.repo.Update(ctx, newBlock.ID, UpdateBlockRequest{Content: rightContent})
-
 	return updated, newBlock, nil
+}
+
+func mergeMaps(base, overlay map[string]interface{}) map[string]interface{} {
+	result := make(map[string]interface{}, len(base))
+	for k, v := range base {
+		result[k] = v
+	}
+	for k, v := range overlay {
+		result[k] = v
+	}
+	return result
 }
 
 func (s *Service) MergeBlocks(ctx context.Context, sourceID, targetID uuid.UUID) (Block, error) {
@@ -230,15 +261,28 @@ func (s *Service) MergeBlocks(ctx context.Context, sourceID, targetID uuid.UUID)
 	}
 
 	var sc, tc map[string]interface{}
-	json.Unmarshal(source.Content, &sc)
-	json.Unmarshal(target.Content, &tc)
+	if err := json.Unmarshal(source.Content, &sc); err != nil {
+		return Block{}, fmt.Errorf("parse source content: %w", err)
+	}
+	if err := json.Unmarshal(target.Content, &tc); err != nil {
+		return Block{}, fmt.Errorf("parse target content: %w", err)
+	}
 
-	srcRich, _ := sc["rich_text"].([]interface{})
-	tgtRich, _ := tc["rich_text"].([]interface{})
+	srcRich, ok := sc["rich_text"].([]interface{})
+	if !ok {
+		srcRich = []interface{}{}
+	}
+	tgtRich, ok := tc["rich_text"].([]interface{})
+	if !ok {
+		tgtRich = []interface{}{}
+	}
 
 	merged := append(tgtRich, srcRich...)
 	tc["rich_text"] = merged
-	mergedContent, _ := json.Marshal(tc)
+	mergedContent, err := json.Marshal(tc)
+	if err != nil {
+		return Block{}, fmt.Errorf("marshal merged content: %w", err)
+	}
 
 	updated, err := s.repo.Update(ctx, targetID, UpdateBlockRequest{Content: mergedContent})
 	if err != nil {

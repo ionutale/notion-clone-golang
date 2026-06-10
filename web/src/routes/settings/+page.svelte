@@ -1,6 +1,7 @@
 <script lang="ts">
   import { api } from '$lib/api';
   import { authStore } from '$lib/stores/auth.svelte';
+  import { theme } from '$lib/stores/theme.svelte';
   import { goto } from '$app/navigation';
   import PromptDialog from '$lib/components/PromptDialog.svelte';
 
@@ -188,6 +189,27 @@
           {passwordSaving ? 'Changing...' : 'Change password'}
         </button>
       </form>
+    </div>
+  </div>
+
+  <div class="card bg-base-100 border border-base-300 mb-6">
+    <div class="card-body">
+      <h2 class="card-title text-lg mb-4">Theme</h2>
+      <div class="flex flex-col gap-2">
+        {#each ['light', 'dark', 'system'] as option}
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input
+              type="radio"
+              name="theme"
+              class="radio radio-primary"
+              value={option}
+              checked={theme.preference === option}
+              onchange={() => theme.preference = option}
+            />
+            <span class="capitalize">{option}</span>
+          </label>
+        {/each}
+      </div>
     </div>
   </div>
 

@@ -19,7 +19,9 @@ func WorkspaceMiddleware(validator WorkspaceValidator) func(http.Handler) http.H
 			workspaceID := chi.URLParam(r, "workspaceId")
 			userID, ok := r.Context().Value(auth.CtxUserID).(string)
 			if !ok {
-				http.Error(w, `{"error":"not authenticated"}`, http.StatusUnauthorized)
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusUnauthorized)
+				w.Write([]byte(`{"error":"not authenticated"}`))
 				return
 			}
 			ok, err := validator.IsMember(r.Context(), workspaceID, userID)

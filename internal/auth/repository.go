@@ -6,7 +6,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"log"
+	"log/slog"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -91,8 +92,22 @@ func (r *Repository) UpdatePassword(ctx context.Context, id, password string) er
 }
 
 func (r *Repository) DeleteUser(ctx context.Context, id string) error {
-	_, err := r.pool.Exec(ctx, `DELETE FROM users WHERE id = $1`, id)
-	return err
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	if _, err := tx.Exec(ctx, `DELETE FROM refresh_tokens WHERE user_id = $1`, id); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM workspace_members WHERE user_id = $1`, id); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM users WHERE id = $1`, id); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 func hashToken(bytes []byte) string {
@@ -100,7 +115,7 @@ func hashToken(bytes []byte) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func (r *Repository) CreateRefreshToken(ctx context.Context, userID string, expiresAt string) (string, error) {
+func (r *Repository) CreateRefreshToken(ctx context.Context, userID string, expiresAtStr string) (string, error) {
 	bytes := make([]byte, 32)
 	_, err := rand.Read(bytes)
 	if err != nil {
@@ -108,6 +123,10 @@ func (r *Repository) CreateRefreshToken(ctx context.Context, userID string, expi
 	}
 	token := hex.EncodeToString(bytes)
 	tokenHash := hashToken(bytes)
+	expiresAt, err := time.Parse(time.RFC3339, expiresAtStr)
+	if err != nil {
+		expiresAt = time.Now().Add(7 * 24 * time.Hour)
+	}
 	_, err = r.pool.Exec(ctx,
 		`INSERT INTO refresh_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, $3)`,
 		userID, tokenHash, expiresAt,
@@ -136,7 +155,7 @@ func (r *Repository) findAndConsumeRefreshToken(ctx context.Context, tokenHex st
 	if consume {
 		_, err = r.pool.Exec(ctx, `DELETE FROM refresh_tokens WHERE id = $1`, id)
 		if err != nil {
-			log.Printf("failed to delete consumed refresh token %s: %v", id, err)
+			slog.Warn("failed to delete consumed refresh token", "id", id, "error", err)
 		}
 	}
 	return id, userID, nil
@@ -174,7 +193,7 @@ func (r *Repository) GetUserByRefreshToken(ctx context.Context, tokenHex string)
 	}
 	_, err = r.pool.Exec(ctx, `DELETE FROM refresh_tokens WHERE id = $1`, id)
 	if err != nil {
-		log.Printf("failed to delete consumed refresh token %s: %v", id, err)
+		slog.Warn("failed to delete consumed refresh token", "id", id, "error", err)
 	}
 	return user, nil
 }

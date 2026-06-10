@@ -92,8 +92,22 @@ func (r *Repository) Update(ctx context.Context, id, name string) error {
 }
 
 func (r *Repository) Delete(ctx context.Context, id string) error {
-	_, err := r.pool.Exec(ctx, `DELETE FROM workspaces WHERE id = $1`, id)
-	return err
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	if _, err := tx.Exec(ctx, `DELETE FROM blocks WHERE workspace_id = $1`, id); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM workspace_members WHERE workspace_id = $1`, id); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM workspaces WHERE id = $1`, id); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 func (r *Repository) IsMember(ctx context.Context, workspaceID, userID string) (bool, error) {

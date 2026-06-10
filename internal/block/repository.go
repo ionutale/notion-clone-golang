@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
@@ -30,10 +31,16 @@ func (r *Repository) Create(ctx context.Context, b *Block) error {
 		content = json.RawMessage("{}")
 	}
 
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
 	var path *string
 	if b.ParentID != nil {
 		var parentPath string
-		err := r.pool.QueryRow(ctx, `SELECT path::text FROM blocks WHERE id = $1`, *b.ParentID).Scan(&parentPath)
+		err := tx.QueryRow(ctx, `SELECT path::text FROM blocks WHERE id = $1`, *b.ParentID).Scan(&parentPath)
 		if err == nil {
 			p := parentPath + "." + b.ID.String()
 			path = &p
@@ -46,8 +53,8 @@ func (r *Repository) Create(ctx context.Context, b *Block) error {
 
 	if b.Position == 0 {
 		var maxPos *int64
-		err := r.pool.QueryRow(ctx,
-			`SELECT MAX(position) FROM blocks WHERE parent_id IS NOT DISTINCT FROM $1 AND deleted_at IS NULL`,
+		err := tx.QueryRow(ctx,
+			`SELECT MAX(position) FROM blocks WHERE parent_id IS NOT DISTINCT FROM $1 AND deleted_at IS NULL FOR UPDATE`,
 			b.ParentID).Scan(&maxPos)
 		if err == nil && maxPos != nil {
 			b.Position = *maxPos + (1 << 31)
@@ -56,11 +63,15 @@ func (r *Repository) Create(ctx context.Context, b *Block) error {
 		}
 	}
 
-	_, err := r.pool.Exec(ctx, `
+	_, err = tx.Exec(ctx, `
 		INSERT INTO blocks (id, workspace_id, parent_id, type, content, position, path, created_by, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7::ltree, $8, $9, $10)`,
 		b.ID, b.WorkspaceID, b.ParentID, b.Type, content, b.Position, *b.Path, b.CreatedBy, b.CreatedAt, b.UpdatedAt)
-	return err
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
 }
 
 func scanBlock(row pgx.Row) (Block, error) {
@@ -146,7 +157,17 @@ func (r *Repository) Update(ctx context.Context, id uuid.UUID, req UpdateBlockRe
 }
 
 func (r *Repository) SoftDelete(ctx context.Context, id uuid.UUID) error {
-	_, err := r.pool.Exec(ctx, `UPDATE blocks SET deleted_at = now(), updated_at = now() WHERE id = $1 AND deleted_at IS NULL`, id)
+	_, err := r.pool.Exec(ctx, `
+		WITH RECURSIVE descendants AS (
+			SELECT id FROM blocks WHERE id = $1 AND deleted_at IS NULL
+			UNION ALL
+			SELECT b.id FROM blocks b
+			INNER JOIN descendants d ON b.parent_id = d.id
+			WHERE b.deleted_at IS NULL
+		)
+		UPDATE blocks SET deleted_at = now(), updated_at = now()
+		WHERE id IN (SELECT id FROM descendants)
+	`, id)
 	return err
 }
 
@@ -159,11 +180,40 @@ func (r *Repository) Restore(ctx context.Context, id uuid.UUID) (Block, error) {
 }
 
 func (r *Repository) Move(ctx context.Context, id uuid.UUID, req MoveBlockRequest) (Block, error) {
-	_, err := r.pool.Exec(ctx, `UPDATE blocks SET parent_id = $1, position = $2, updated_at = now() WHERE id = $3 AND deleted_at IS NULL`,
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return Block{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	_, err = tx.Exec(ctx, `UPDATE blocks SET parent_id = $1, position = $2, updated_at = now() WHERE id = $3 AND deleted_at IS NULL`,
 		req.ParentID, req.Position, id)
 	if err != nil {
 		return Block{}, err
 	}
+
+	// Rebuild path for the moved block
+	if req.ParentID != nil {
+		var parentPath string
+		err = tx.QueryRow(ctx, `SELECT path::text FROM blocks WHERE id = $1`, *req.ParentID).Scan(&parentPath)
+		if err == nil {
+			newPath := parentPath + "." + id.String()
+			_, err = tx.Exec(ctx, `UPDATE blocks SET path = $1::ltree WHERE id = $2`, newPath, id)
+			if err != nil {
+				return Block{}, err
+			}
+		}
+	} else {
+		_, err = tx.Exec(ctx, `UPDATE blocks SET path = $1::ltree WHERE id = $2`, id.String(), id)
+		if err != nil {
+			return Block{}, err
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return Block{}, err
+	}
+
 	return r.GetByID(ctx, id)
 }
 
@@ -276,7 +326,15 @@ func (r *Repository) GetSiblings(ctx context.Context, parentID *uuid.UUID, works
 }
 
 func (r *Repository) PermanentDelete(ctx context.Context, id uuid.UUID) error {
-	_, err := r.pool.Exec(ctx, `DELETE FROM blocks WHERE id = $1`, id)
+	_, err := r.pool.Exec(ctx, `
+		WITH RECURSIVE descendants AS (
+			SELECT id FROM blocks WHERE id = $1
+			UNION ALL
+			SELECT b.id FROM blocks b
+			INNER JOIN descendants d ON b.parent_id = d.id
+		)
+		DELETE FROM blocks WHERE id IN (SELECT id FROM descendants)
+	`, id)
 	return err
 }
 
@@ -303,12 +361,23 @@ func (r *Repository) ListTrash(ctx context.Context, workspaceID uuid.UUID) ([]Pa
 	return pages, nil
 }
 
-func (r *Repository) CleanupExpired(ctx context.Context, workspaceID uuid.UUID, days int) error {
-	_, err := r.pool.Exec(ctx, `
-		DELETE FROM blocks
-		WHERE workspace_id = $1 AND deleted_at IS NOT NULL AND deleted_at < now() - ($2 || ' days')::interval
-	`, workspaceID, fmt.Sprintf("%d", days))
-	return err
+func (r *Repository) CleanupExpired(ctx context.Context, workspaceID *uuid.UUID, days int) error {
+	var err error
+	if workspaceID != nil {
+		_, err = r.pool.Exec(ctx, `
+			DELETE FROM blocks
+			WHERE workspace_id = $1 AND deleted_at IS NOT NULL AND deleted_at < now() - ($2 || ' days')::interval
+		`, *workspaceID, fmt.Sprintf("%d", days))
+	} else {
+		_, err = r.pool.Exec(ctx, `
+			DELETE FROM blocks
+			WHERE deleted_at IS NOT NULL AND deleted_at < now() - ($1 || ' days')::interval
+		`, fmt.Sprintf("%d", days))
+	}
+	if err != nil {
+		slog.Warn("cleanup expired failed", "error", err)
+	}
+	return nil
 }
 
 func (r *Repository) InsertAtPosition(ctx context.Context, b *Block, position int64) error {

@@ -107,7 +107,7 @@ func TestSignup_MissingFields(t *testing.T) {
 
 	router.ServeHTTP(rec, req)
 
-	assert.Equal(t, http.StatusCreated, rec.Code)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
 func TestSignup_InvalidJSON(t *testing.T) {

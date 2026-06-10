@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"time"
 
@@ -44,6 +45,13 @@ func NewService(repo UserRepository, wsCreator WorkspaceCreator) *Service {
 	return &Service{repo: repo, wsCreator: wsCreator, jwtSecret: secret}
 }
 
+func NewServiceWithSecret(repo UserRepository, wsCreator WorkspaceCreator, jwtSecret string) *Service {
+	if jwtSecret == "" {
+		jwtSecret = "dev-secret-change-in-production"
+	}
+	return &Service{repo: repo, wsCreator: wsCreator, jwtSecret: jwtSecret}
+}
+
 func (s *Service) Signup(ctx context.Context, req SignupRequest) (*AuthResponse, string, error) {
 	user, err := s.repo.CreateUser(ctx, req.Email, req.Password, req.Name)
 	if err != nil {
@@ -51,7 +59,11 @@ func (s *Service) Signup(ctx context.Context, req SignupRequest) (*AuthResponse,
 	}
 	_, err = s.wsCreator.Create(ctx, user.Name+"'s Workspace", user.ID)
 	if err != nil {
-		return nil, "", err
+		// Rollback: delete the user if workspace creation fails
+		if delErr := s.repo.DeleteUser(ctx, user.ID); delErr != nil {
+			return nil, "", fmt.Errorf("create workspace: %w (rollback failed: %v)", err, delErr)
+		}
+		return nil, "", fmt.Errorf("create workspace: %w", err)
 	}
 	accessToken, err := GenerateAccessToken(user.ID, s.jwtSecret)
 	if err != nil {

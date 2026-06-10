@@ -1,19 +1,29 @@
 package internal
 
 import (
-	"encoding/json"
 	"net/http"
 	"path/filepath"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
 	"github.com/ionutale/notion-clone-golang/internal/auth"
 	"github.com/ionutale/notion-clone-golang/internal/block"
+	"github.com/ionutale/notion-clone-golang/internal/httputil"
 	"github.com/ionutale/notion-clone-golang/internal/middleware"
 	"github.com/ionutale/notion-clone-golang/internal/storage"
 	ws "github.com/ionutale/notion-clone-golang/internal/workspace"
 )
+
+var allowedUploadMIMETypes = map[string]bool{
+	"image/jpeg":       true,
+	"image/png":        true,
+	"image/gif":        true,
+	"image/webp":       true,
+	"image/svg+xml":    true,
+	"application/pdf":  true,
+}
 
 func MountAPI(
 	r chi.Router,
@@ -21,14 +31,20 @@ func MountAPI(
 	fileStore storage.FileStore,
 	authSvc *auth.Service,
 	wsSvc *ws.Service,
+	devMode bool,
 ) {
-	authH := auth.NewHandler(authSvc)
+	var authH *auth.Handler
+	if devMode {
+		authH = auth.NewHandlerDev(authSvc)
+	} else {
+		authH = auth.NewHandler(authSvc)
+	}
 	wsH := ws.NewHandler(wsSvc, authSvc)
 	blockH := block.NewHandler(blockSvc)
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-			json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+			httputil.JSON(w, http.StatusOK, map[string]string{"status": "ok"})
 		})
 
 		// Public auth routes
@@ -53,26 +69,43 @@ func MountAPI(
 
 		// Upload (protected)
 		r.With(middleware.AuthMiddleware(authSvc)).Post("/uploads", func(w http.ResponseWriter, r *http.Request) {
-			r.ParseMultipartForm(10 << 20)
+			if err := r.ParseMultipartForm(10 << 20); err != nil {
+				httputil.Error(w, http.StatusBadRequest, "invalid multipart form")
+				return
+			}
 			file, header, err := r.FormFile("file")
 			if err != nil {
-				http.Error(w, `{"error":"missing file"}`, http.StatusBadRequest)
+				httputil.Error(w, http.StatusBadRequest, "missing file")
 				return
 			}
 			defer file.Close()
 
+			// Validate MIME type
+			buf := make([]byte, 512)
+			n, _ := file.Read(buf)
+			file.Seek(0, 0)
+			contentType := http.DetectContentType(buf[:n])
+			if !allowedUploadMIMETypes[contentType] && !strings.HasPrefix(contentType, "image/") {
+				httputil.Error(w, http.StatusBadRequest, "unsupported file type")
+				return
+			}
+
 			ext := filepath.Ext(header.Filename)
+			if ext != "" && strings.ContainsAny(ext, "/\\") {
+				httputil.Error(w, http.StatusBadRequest, "invalid file extension")
+				return
+			}
 			key := uuid.New().String() + ext
 
 			if err := fileStore.Put(r.Context(), key, file); err != nil {
-				http.Error(w, `{"error":"upload failed"}`, http.StatusInternalServerError)
+				httputil.Error(w, http.StatusInternalServerError, "upload failed")
 				return
 			}
 
 			url := fileStore.PublicURL(key)
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusCreated)
-			json.NewEncoder(w).Encode(map[string]string{"url": url})
+			httputil.JSON(w, http.StatusCreated, map[string]string{"url": url})
 		})
 	})
 }
+
+
