@@ -1,5 +1,6 @@
 <script lang="ts">
   import { blockStore } from '$lib/stores/blocks.svelte';
+  import { execFormat } from '$lib/format';
 
   let { blockId, onEnter, onBackspace, onSlash, onMoveUp, onMoveDown, onIndent, onOutdent, shouldFocus = false }:
     {
@@ -54,16 +55,16 @@
       onMoveDown();
     } else if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
       e.preventDefault();
-      document.execCommand('bold');
+      execFormat('bold');
     } else if ((e.metaKey || e.ctrlKey) && e.key === 'i') {
       e.preventDefault();
-      document.execCommand('italic');
+      execFormat('italic');
     } else if ((e.metaKey || e.ctrlKey) && e.key === 'u') {
       e.preventDefault();
-      document.execCommand('underline');
+      execFormat('underline');
     } else if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'S') {
       e.preventDefault();
-      document.execCommand('strikeThrough');
+      execFormat('strikeThrough');
     } else if (e.key === 'Tab' && !e.shiftKey) {
       e.preventDefault();
       onIndent?.();

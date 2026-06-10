@@ -1,6 +1,7 @@
 <script lang="ts">
   import { blockStore } from '$lib/stores/blocks.svelte';
   import PromptDialog from '$lib/components/PromptDialog.svelte';
+  import { execFormat, queryFormatState } from '$lib/format';
 
   let activeFormats = $state({
     bold: false,
@@ -25,17 +26,17 @@
   });
 
   function exec(cmd: string, val?: string) {
-    document.execCommand(cmd, false, val);
+    execFormat(cmd, val);
     document.getSelection()?.getRangeAt(0)?.collapse(true);
     updateActiveState();
   }
 
   function updateActiveState() {
     activeFormats = {
-      bold: document.queryCommandState('bold'),
-      italic: document.queryCommandState('italic'),
-      underline: document.queryCommandState('underline'),
-      strikeThrough: document.queryCommandState('strikeThrough'),
+      bold: queryFormatState('bold'),
+      italic: queryFormatState('italic'),
+      underline: queryFormatState('underline'),
+      strikeThrough: queryFormatState('strikeThrough'),
     };
   }
 
@@ -53,7 +54,7 @@
 
   function applyLink(url: string) {
     if (url) {
-      document.execCommand('createLink', false, url);
+      execFormat('createLink', url);
     }
     showLinkPrompt = false;
   }
@@ -69,7 +70,7 @@
       parent.replaceWith(text);
       sel.removeAllRanges();
     } else {
-      document.execCommand('insertHTML', false, `<code>${range.toString()}</code>`);
+      execFormat('insertHTML', `<code>${range.toString()}</code>`);
     }
   }
 
@@ -82,7 +83,7 @@
   }
 
   function handleClearFormatting() {
-    document.execCommand('removeFormat');
+    execFormat('removeFormat');
   }
 
   function findActiveBlock(): string | null {
