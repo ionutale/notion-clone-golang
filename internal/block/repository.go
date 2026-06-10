@@ -197,22 +197,53 @@ func (r *Repository) Restore(ctx context.Context, id uuid.UUID) (Block, error) {
 }
 
 func (r *Repository) Move(ctx context.Context, id uuid.UUID, req MoveBlockRequest) (Block, error) {
+	return r.MoveWithPosition(ctx, id, req.ParentID, req.Position)
+}
+
+func (r *Repository) MoveWithPosition(ctx context.Context, id uuid.UUID, newParentID *uuid.UUID, desiredPos int64) (Block, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return Block{}, err
 	}
 	defer tx.Rollback(ctx)
 
+	// Lock siblings and compute the actual position using fractional indexing
+	var finalPos int64
+	err = tx.QueryRow(ctx, `
+		WITH locked AS (
+			SELECT position FROM blocks
+			WHERE parent_id IS NOT DISTINCT FROM $1 AND workspace_id = (SELECT workspace_id FROM blocks WHERE id = $2)
+			  AND deleted_at IS NULL AND id != $2
+			ORDER BY position FOR UPDATE
+		),
+		before AS (
+			SELECT position FROM locked WHERE position < $3 ORDER BY position DESC LIMIT 1
+		),
+		after AS (
+			SELECT position FROM locked WHERE position > $3 ORDER BY position ASC LIMIT 1
+		)
+		SELECT
+			CASE
+				WHEN (SELECT position FROM before) IS NULL AND (SELECT position FROM after) IS NULL THEN 2147483648
+				WHEN (SELECT position FROM before) IS NULL THEN (SELECT position FROM after) / 2
+				WHEN (SELECT position FROM after) IS NULL THEN (SELECT position FROM before) + 2147483648
+				ELSE ((SELECT position FROM before) + (SELECT position FROM after)) / 2
+			END
+	`, newParentID, id, desiredPos).Scan(&finalPos)
+	if err != nil {
+		return Block{}, err
+	}
+
 	_, err = tx.Exec(ctx, `UPDATE blocks SET parent_id = $1, position = $2, updated_at = now() WHERE id = $3 AND deleted_at IS NULL`,
-		req.ParentID, req.Position, id)
+		newParentID, finalPos, id)
 	if err != nil {
 		return Block{}, err
 	}
 
 	// Rebuild path for the moved block
-	if req.ParentID != nil {
+	if newParentID != nil {
 		var parentPath string
-		err = tx.QueryRow(ctx, `SELECT path::text FROM blocks WHERE id = $1`, *req.ParentID).Scan(&parentPath)
+		err = tx.QueryRow(ctx, `SELECT path::text FROM blocks WHERE id = $1`, *newParentID).Scan(&parentPath)
 		if err == nil {
 			newPath := parentPath + "." + id.String()
 			_, err = tx.Exec(ctx, `UPDATE blocks SET path = $1::ltree WHERE id = $2`, newPath, id)

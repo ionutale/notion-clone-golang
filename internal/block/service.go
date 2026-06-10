@@ -129,31 +129,7 @@ func (s *Service) RestoreBlock(ctx context.Context, id uuid.UUID) (Block, error)
 }
 
 func (s *Service) MoveBlock(ctx context.Context, workspaceID uuid.UUID, id uuid.UUID, req MoveBlockRequest) (Block, error) {
-	siblings, err := s.repo.GetSiblings(ctx, req.ParentID, workspaceID)
-	if err != nil {
-		return Block{}, fmt.Errorf("get siblings: %w", err)
-	}
-
-	var before, after *int64
-	for _, sib := range siblings {
-		if sib.ID == id {
-			continue
-		}
-		if sib.Position < req.Position && (before == nil || sib.Position > *before) {
-			before = &sib.Position
-		}
-		if sib.Position > req.Position && (after == nil || sib.Position < *after) {
-			after = &sib.Position
-		}
-	}
-
-	position := MiddlePosition(before, after)
-	moveReq := MoveBlockRequest{
-		ParentID: req.ParentID,
-		Position: position,
-	}
-
-	return s.repo.Move(ctx, id, moveReq)
+	return s.repo.MoveWithPosition(ctx, id, req.ParentID, req.Position)
 }
 
 func (s *Service) Search(ctx context.Context, workspaceID uuid.UUID, query string, limit, offset int) ([]SearchResult, error) {
