@@ -8,7 +8,8 @@ export type BlockType =
   | 'numbered_list_item'
   | 'toggle'
   | 'divider'
-  | 'image';
+  | 'image'
+  | 'code';
 
 export interface Block {
   id: string;

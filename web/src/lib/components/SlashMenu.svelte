@@ -21,6 +21,7 @@
     { type: 'divider', label: 'Divider', icon: '—' },
     { type: 'image', label: 'Image', icon: '🖼' },
     { type: 'page', label: 'Page', icon: '📄' },
+    { type: 'code', label: 'Code', icon: '</>' },
   ];
 
   let filter = $state('');

@@ -20,12 +20,14 @@ const (
 	TypeToggle     BlockType = "toggle"
 	TypeDivider    BlockType = "divider"
 	TypeImage      BlockType = "image"
+	TypeCode       BlockType = "code"
 )
 
 var ValidTypes = map[BlockType]bool{
 	TypePage: true, TypeText: true, TypeHeading1: true,
 	TypeHeading2: true, TypeHeading3: true, TypeBulletList: true,
 	TypeNumberList: true, TypeToggle: true, TypeDivider: true, TypeImage: true,
+	TypeCode: true,
 }
 
 type Block struct {

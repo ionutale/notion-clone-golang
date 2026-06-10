@@ -9,6 +9,7 @@
   import DividerBlock from './blocks/DividerBlock.svelte';
   import ImageBlock from './blocks/ImageBlock.svelte';
   import PageBlock from './blocks/PageBlock.svelte';
+  import CodeBlock from './blocks/CodeBlock.svelte';
   import BlockDragHandle from './BlockDragHandle.svelte';
   import BlockRenderer from './BlockRenderer.svelte';
 
@@ -200,6 +201,8 @@
           <DividerBlock onEnter={handleEnter} onBackspace={handleBackspace} onMoveUp={handleMoveUp} onMoveDown={handleMoveDown} onIndent={handleIndent} onOutdent={handleOutdent} />
         {:else if block.type === 'image'}
           <ImageBlock {blockId} onEnter={handleEnter} onBackspace={handleBackspace} onMoveUp={handleMoveUp} onMoveDown={handleMoveDown} onIndent={handleIndent} onOutdent={handleOutdent} />
+        {:else if block.type === 'code'}
+          <CodeBlock {blockId} onEnter={handleEnter} onBackspace={handleBackspace} onSlash={handleSlash} onMoveUp={handleMoveUp} onMoveDown={handleMoveDown} onIndent={handleIndent} onOutdent={handleOutdent} shouldFocus={needFocus} />
         {:else if block.type === 'page'}
           <PageBlock {blockId} />
         {/if}
