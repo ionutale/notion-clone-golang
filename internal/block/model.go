@@ -65,6 +65,7 @@ type PageSummary struct {
 	Icon      *string    `json:"icon,omitempty"`
 	IconType  *string    `json:"icon_type,omitempty"`
 	Position  int64      `json:"position"`
+	DeletedAt *time.Time `json:"deleted_at,omitempty"`
 	CreatedAt time.Time  `json:"created_at"`
 	UpdatedAt time.Time  `json:"updated_at"`
 }
@@ -81,4 +82,16 @@ type SearchResult struct {
 	BlockType string    `json:"block_type"`
 	Excerpt   string    `json:"excerpt"`
 	Rank      float64   `json:"rank"`
+}
+
+type PageCursor struct {
+	Items      []PageSummary `json:"items"`
+	NextCursor *int64        `json:"next_cursor,omitempty"`
+	HasMore    bool          `json:"has_more"`
+}
+
+type TrashCursor struct {
+	Items      []PageSummary `json:"items"`
+	NextCursor *time.Time    `json:"next_cursor,omitempty"`
+	HasMore    bool          `json:"has_more"`
 }

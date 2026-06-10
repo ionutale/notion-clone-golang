@@ -116,12 +116,12 @@ class BlockStore {
     return api.createPage(title);
   }
 
-  listPages() {
-    return api.listPages();
+  async listAllPages() {
+    return api.listAllPages();
   }
 
   async loadFavorites() {
-    const pages = await api.listFavorites();
+    const pages = await api.listAllFavorites();
     this.favoriteIds = new SvelteSet(pages.map(p => p.id));
   }
 

@@ -75,7 +75,7 @@
   async function loadPages() {
     loading = true;
     try {
-      pages = await blockStore.listPages();
+      pages = await blockStore.listAllPages();
     } catch (e) {
       console.error('Failed to load pages', e);
     } finally {

@@ -118,26 +118,43 @@ func (r *Repository) GetTree(ctx context.Context, pageID uuid.UUID) ([]Block, er
 	return blocks, nil
 }
 
-func (r *Repository) ListPages(ctx context.Context, workspaceID uuid.UUID) ([]PageSummary, error) {
-	rows, err := r.pool.Query(ctx, `
+func (r *Repository) ListPages(ctx context.Context, workspaceID uuid.UUID, cursor *int64, limit int) ([]PageSummary, *int64, error) {
+	query := `
 		SELECT id, content->>'title' AS title, content->>'icon' AS icon, content->>'icon_type' AS icon_type, position, created_at, updated_at
 		FROM blocks
-		WHERE workspace_id = $1 AND type = 'page' AND parent_id IS NULL AND deleted_at IS NULL
-		ORDER BY position`, workspaceID)
+		WHERE workspace_id = $1 AND type = 'page' AND parent_id IS NULL AND deleted_at IS NULL`
+	args := []interface{}{workspaceID}
+	if cursor != nil {
+		args = append(args, *cursor)
+		query += fmt.Sprintf(" AND position > $%d", len(args))
+	}
+	args = append(args, limit+1)
+	query += fmt.Sprintf(" ORDER BY position LIMIT $%d", len(args))
+
+	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer rows.Close()
 
-	pages := make([]PageSummary, 0)
+	pages := make([]PageSummary, 0, limit+1)
 	for rows.Next() {
 		var p PageSummary
 		if err := rows.Scan(&p.ID, &p.Title, &p.Icon, &p.IconType, &p.Position, &p.CreatedAt, &p.UpdatedAt); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		pages = append(pages, p)
 	}
-	return pages, nil
+
+	var nextCursor *int64
+	hasMore := len(pages) > limit
+	if hasMore {
+		pages = pages[:limit]
+		last := pages[len(pages)-1]
+		nextCursor = &last.Position
+	}
+
+	return pages, nextCursor, nil
 }
 
 func (r *Repository) Update(ctx context.Context, id uuid.UUID, req UpdateBlockRequest) (Block, error) {
@@ -266,28 +283,43 @@ func (r *Repository) Search(ctx context.Context, workspaceID uuid.UUID, query st
 	return results, nil
 }
 
-func (r *Repository) ListFavorites(ctx context.Context, workspaceID uuid.UUID) ([]PageSummary, error) {
-	rows, err := r.pool.Query(ctx, `
+func (r *Repository) ListFavorites(ctx context.Context, workspaceID uuid.UUID, cursor *int64, limit int) ([]PageSummary, *int64, error) {
+	query := `
 		SELECT id, content->>'title' AS title, content->>'icon' AS icon, content->>'icon_type' AS icon_type, position, created_at, updated_at
 		FROM blocks
 		WHERE workspace_id = $1 AND type = 'page' AND parent_id IS NULL AND deleted_at IS NULL
-		  AND (content->>'favorited')::boolean = true
-		ORDER BY position
-	`, workspaceID)
+		  AND (content->>'favorited')::boolean = true`
+	args := []interface{}{workspaceID}
+	if cursor != nil {
+		args = append(args, *cursor)
+		query += fmt.Sprintf(" AND position > $%d", len(args))
+	}
+	args = append(args, limit+1)
+	query += fmt.Sprintf(" ORDER BY position LIMIT $%d", len(args))
+
+	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer rows.Close()
 
-	pages := make([]PageSummary, 0)
+	pages := make([]PageSummary, 0, limit+1)
 	for rows.Next() {
 		var p PageSummary
 		if err := rows.Scan(&p.ID, &p.Title, &p.Icon, &p.IconType, &p.Position, &p.CreatedAt, &p.UpdatedAt); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		pages = append(pages, p)
 	}
-	return pages, nil
+
+	var nextCursor *int64
+	hasMore := len(pages) > limit
+	if hasMore {
+		pages = pages[:limit]
+		nextCursor = &pages[len(pages)-1].Position
+	}
+
+	return pages, nextCursor, nil
 }
 
 func MiddlePosition(before, after *int64) int64 {
@@ -338,27 +370,42 @@ func (r *Repository) PermanentDelete(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
-func (r *Repository) ListTrash(ctx context.Context, workspaceID uuid.UUID) ([]PageSummary, error) {
-	rows, err := r.pool.Query(ctx, `
-		SELECT id, content->>'title' AS title, content->>'icon' AS icon, content->>'icon_type' AS icon_type, created_at, updated_at
+func (r *Repository) ListTrash(ctx context.Context, workspaceID uuid.UUID, cursor *time.Time, limit int) ([]PageSummary, *time.Time, error) {
+	query := `
+		SELECT id, content->>'title' AS title, content->>'icon' AS icon, content->>'icon_type' AS icon_type, deleted_at, created_at, updated_at
 		FROM blocks
-		WHERE workspace_id = $1 AND type = 'page' AND parent_id IS NULL AND deleted_at IS NOT NULL
-		ORDER BY deleted_at DESC
-	`, workspaceID)
+		WHERE workspace_id = $1 AND type = 'page' AND parent_id IS NULL AND deleted_at IS NOT NULL`
+	args := []interface{}{workspaceID}
+	if cursor != nil {
+		args = append(args, *cursor)
+		query += fmt.Sprintf(" AND deleted_at < $%d", len(args))
+	}
+	args = append(args, limit+1)
+	query += fmt.Sprintf(" ORDER BY deleted_at DESC LIMIT $%d", len(args))
+
+	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer rows.Close()
 
-	pages := make([]PageSummary, 0)
+	pages := make([]PageSummary, 0, limit+1)
 	for rows.Next() {
 		var p PageSummary
-		if err := rows.Scan(&p.ID, &p.Title, &p.Icon, &p.IconType, &p.CreatedAt, &p.UpdatedAt); err != nil {
-			return nil, err
+		if err := rows.Scan(&p.ID, &p.Title, &p.Icon, &p.IconType, &p.DeletedAt, &p.CreatedAt, &p.UpdatedAt); err != nil {
+			return nil, nil, err
 		}
 		pages = append(pages, p)
 	}
-	return pages, nil
+
+	var nextCursor *time.Time
+	hasMore := len(pages) > limit
+	if hasMore {
+		pages = pages[:limit]
+		nextCursor = pages[len(pages)-1].DeletedAt
+	}
+
+	return pages, nextCursor, nil
 }
 
 func (r *Repository) CleanupExpired(ctx context.Context, workspaceID *uuid.UUID, days int) error {

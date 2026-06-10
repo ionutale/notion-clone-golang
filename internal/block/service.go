@@ -63,8 +63,8 @@ func (s *Service) GetPageTree(ctx context.Context, pageID uuid.UUID) (PageTree, 
 	return PageTree{Page: page, Blocks: blocks}, nil
 }
 
-func (s *Service) ListPages(ctx context.Context, workspaceID uuid.UUID) ([]PageSummary, error) {
-	return s.repo.ListPages(ctx, workspaceID)
+func (s *Service) ListPages(ctx context.Context, workspaceID uuid.UUID, cursor *int64, limit int) ([]PageSummary, *int64, error) {
+	return s.repo.ListPages(ctx, workspaceID, cursor, limit)
 }
 
 func (s *Service) CreateBlock(ctx context.Context, workspaceID, userID uuid.UUID, req CreateBlockRequest) (Block, error) {
@@ -179,12 +179,12 @@ func (s *Service) StartCleanupLoop(ctx context.Context, interval time.Duration, 
 	}()
 }
 
-func (s *Service) ListFavorites(ctx context.Context, workspaceID uuid.UUID) ([]PageSummary, error) {
-	return s.repo.ListFavorites(ctx, workspaceID)
+func (s *Service) ListFavorites(ctx context.Context, workspaceID uuid.UUID, cursor *int64, limit int) ([]PageSummary, *int64, error) {
+	return s.repo.ListFavorites(ctx, workspaceID, cursor, limit)
 }
 
-func (s *Service) ListTrash(ctx context.Context, workspaceID uuid.UUID) ([]PageSummary, error) {
-	return s.repo.ListTrash(ctx, workspaceID)
+func (s *Service) ListTrash(ctx context.Context, workspaceID uuid.UUID, cursor *time.Time, limit int) ([]PageSummary, *time.Time, error) {
+	return s.repo.ListTrash(ctx, workspaceID, cursor, limit)
 }
 
 func (s *Service) PermanentDelete(ctx context.Context, id uuid.UUID) error {

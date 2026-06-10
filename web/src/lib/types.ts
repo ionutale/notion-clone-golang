@@ -42,7 +42,9 @@ export interface PageSummary {
   icon?: string | null;
   icon_type?: string | null;
   position: number;
+  deleted_at?: string | null;
   created_at: string;
+  updated_at?: string;
 }
 
 export interface SearchResult {
@@ -52,4 +54,16 @@ export interface SearchResult {
   block_type: string;
   excerpt: string;
   rank: number;
+}
+
+export interface PageCursorResponse {
+  items: PageSummary[];
+  next_cursor?: number;
+  has_more: boolean;
+}
+
+export interface TrashCursorResponse {
+  items: PageSummary[];
+  next_cursor?: string;
+  has_more: boolean;
 }

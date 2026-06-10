@@ -1,6 +1,6 @@
 import { authStore } from '$lib/stores/auth.svelte';
 import { workspaceStore } from '$lib/stores/workspaces.svelte';
-import type { Block, BlockType, PageSummary, PageTree, SearchResult, User } from './types';
+import type { Block, BlockType, PageCursorResponse, PageSummary, PageTree, SearchResult, TrashCursorResponse, User } from './types';
 
 const BASE_URL = '/api/v1';
 
@@ -87,8 +87,23 @@ class ApiClient {
     return this.request('POST', `${await this.wsPrefix()}/pages`, { title });
   }
 
-  async listPages(): Promise<PageSummary[]> {
-    return this.request('GET', `${await this.wsPrefix()}/pages`);
+  async listPages(cursor?: number, limit = 50): Promise<PageCursorResponse> {
+    const params = new URLSearchParams();
+    if (cursor !== undefined) params.set('cursor', String(cursor));
+    params.set('limit', String(limit));
+    return this.request('GET', `${await this.wsPrefix()}/pages?${params}`);
+  }
+
+  async listAllPages(): Promise<PageSummary[]> {
+    const items: PageSummary[] = [];
+    let cursor: number | undefined;
+    while (true) {
+      const page = await this.listPages(cursor);
+      items.push(...page.items);
+      if (!page.has_more || page.next_cursor === undefined) break;
+      cursor = page.next_cursor;
+    }
+    return items;
   }
 
   async getPageTree(id: string): Promise<PageTree> {
@@ -111,16 +126,46 @@ class ApiClient {
     return this.request('PATCH', `${await this.wsPrefix()}/blocks/${id}/restore`);
   }
 
-  async listTrash(): Promise<PageSummary[]> {
-    return this.request('GET', `${await this.wsPrefix()}/trash`);
+  async listTrash(cursor?: string, limit = 50): Promise<TrashCursorResponse> {
+    const params = new URLSearchParams();
+    if (cursor !== undefined) params.set('cursor', cursor);
+    params.set('limit', String(limit));
+    return this.request('GET', `${await this.wsPrefix()}/trash?${params}`);
+  }
+
+  async listAllTrash(): Promise<PageSummary[]> {
+    const items: PageSummary[] = [];
+    let cursor: string | undefined;
+    while (true) {
+      const page = await this.listTrash(cursor);
+      items.push(...page.items);
+      if (!page.has_more || page.next_cursor === undefined) break;
+      cursor = page.next_cursor;
+    }
+    return items;
   }
 
   async permanentDeleteBlock(id: string): Promise<void> {
     return this.request('DELETE', `${await this.wsPrefix()}/blocks/${id}/permanent`);
   }
 
-  async listFavorites(): Promise<PageSummary[]> {
-    return this.request('GET', `${await this.wsPrefix()}/favorites`);
+  async listFavorites(cursor?: number, limit = 50): Promise<PageCursorResponse> {
+    const params = new URLSearchParams();
+    if (cursor !== undefined) params.set('cursor', String(cursor));
+    params.set('limit', String(limit));
+    return this.request('GET', `${await this.wsPrefix()}/favorites?${params}`);
+  }
+
+  async listAllFavorites(): Promise<PageSummary[]> {
+    const items: PageSummary[] = [];
+    let cursor: number | undefined;
+    while (true) {
+      const page = await this.listFavorites(cursor);
+      items.push(...page.items);
+      if (!page.has_more || page.next_cursor === undefined) break;
+      cursor = page.next_cursor;
+    }
+    return items;
   }
 
   async toggleFavorite(id: string, favorited: boolean): Promise<Block> {

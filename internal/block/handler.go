@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -77,18 +78,30 @@ func (h *Handler) GetPageTree(w http.ResponseWriter, r *http.Request) {
 	httputil.JSON(w, http.StatusOK, tree)
 }
 
+func parsePaginationParams(r *http.Request) (cursor *int64, limit int) {
+	limit = 50
+	if l, err := strconv.Atoi(r.URL.Query().Get("limit")); err == nil && l > 0 && l <= 200 {
+		limit = l
+	}
+	if c, err := strconv.ParseInt(r.URL.Query().Get("cursor"), 10, 64); err == nil && c > 0 {
+		cursor = &c
+	}
+	return
+}
+
 func (h *Handler) ListPages(w http.ResponseWriter, r *http.Request) {
 	wsID, err := workspaceIDFromRequest(r)
 	if err != nil {
 		httputil.Error(w, http.StatusBadRequest, "invalid workspace id")
 		return
 	}
-	pages, err := h.svc.ListPages(r.Context(), wsID)
+	cursor, limit := parsePaginationParams(r)
+	pages, nextCursor, err := h.svc.ListPages(r.Context(), wsID, cursor, limit)
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	httputil.JSON(w, http.StatusOK, pages)
+	httputil.JSON(w, http.StatusOK, PageCursor{Items: pages, NextCursor: nextCursor, HasMore: nextCursor != nil})
 }
 
 func (h *Handler) CreateBlock(w http.ResponseWriter, r *http.Request) {
@@ -223,12 +236,13 @@ func (h *Handler) ListFavorites(w http.ResponseWriter, r *http.Request) {
 		httputil.Error(w, http.StatusBadRequest, "invalid workspace id")
 		return
 	}
-	pages, err := h.svc.ListFavorites(r.Context(), wsID)
+	cursor, limit := parsePaginationParams(r)
+	pages, nextCursor, err := h.svc.ListFavorites(r.Context(), wsID, cursor, limit)
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	httputil.JSON(w, http.StatusOK, pages)
+	httputil.JSON(w, http.StatusOK, PageCursor{Items: pages, NextCursor: nextCursor, HasMore: nextCursor != nil})
 }
 
 func (h *Handler) ListTrash(w http.ResponseWriter, r *http.Request) {
@@ -237,12 +251,20 @@ func (h *Handler) ListTrash(w http.ResponseWriter, r *http.Request) {
 		httputil.Error(w, http.StatusBadRequest, "invalid workspace id")
 		return
 	}
-	pages, err := h.svc.ListTrash(r.Context(), wsID)
+	limit := 50
+	if l, err := strconv.Atoi(r.URL.Query().Get("limit")); err == nil && l > 0 && l <= 200 {
+		limit = l
+	}
+	var cursor *time.Time
+	if c, err := time.Parse(time.RFC3339Nano, r.URL.Query().Get("cursor")); err == nil {
+		cursor = &c
+	}
+	pages, nextCursor, err := h.svc.ListTrash(r.Context(), wsID, cursor, limit)
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	httputil.JSON(w, http.StatusOK, pages)
+	httputil.JSON(w, http.StatusOK, TrashCursor{Items: pages, NextCursor: nextCursor, HasMore: nextCursor != nil})
 }
 
 func (h *Handler) PermanentDelete(w http.ResponseWriter, r *http.Request) {
