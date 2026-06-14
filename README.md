@@ -15,7 +15,7 @@ A full-stack Notion-like note-taking application built with **Go** (Chi router, 
 - Split and merge blocks
 - Cover images for pages
  
-### Organization
+### Organization 
 - Multi-workspace support with member invitations
 - Sidebar with page list and favorites
 - Full-text search across all pages
