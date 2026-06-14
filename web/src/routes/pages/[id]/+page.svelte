@@ -11,5 +11,6 @@
 
   <div class="flex-1 overflow-y-auto">
     <Editor {pageId} />
+    <!-- <div>ciao</div> -->
   </div>
 </div>

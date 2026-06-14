@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"fmt"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -17,12 +18,12 @@ import (
 )
 
 var allowedUploadMIMETypes = map[string]bool{
-	"image/jpeg":       true,
-	"image/png":        true,
-	"image/gif":        true,
-	"image/webp":       true,
-	"image/svg+xml":    true,
-	"application/pdf":  true,
+	"image/jpeg":      true,
+	"image/png":       true,
+	"image/gif":       true,
+	"image/webp":      true,
+	"image/svg+xml":   true,
+	"application/pdf": true,
 }
 
 func MountAPI(
@@ -46,6 +47,8 @@ func MountAPI(
 		r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 			httputil.JSON(w, http.StatusOK, map[string]string{"status": "ok"})
 		})
+
+		fmt.Printf("Mounting API routes (dev mode: %v)\n", devMode)
 
 		// Public auth routes
 		authH.RegisterRoutes(r)
@@ -107,5 +110,3 @@ func MountAPI(
 		})
 	})
 }
-
-
