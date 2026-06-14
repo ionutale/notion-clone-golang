@@ -12,7 +12,7 @@ A full-stack Notion-like note-taking application built with **Go** (Chi router, 
 - Slash menu (`/`) for quick block type switching
 - Page icons with emoji picker
 - Drag-and-drop block reordering
-- Split and merge blocks
+- Split and merge blocks 
 - Cover images for pages
  
 ### Organization 
