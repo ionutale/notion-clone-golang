@@ -27,7 +27,7 @@ A full-stack Notion-like note-taking application built with **Go** (Chi router, 
 - Profile management and password change
 - Account deletion
 
-### Architecture
+### Architecture 
 
 ```
 ┌─────────────┐     ┌──────────────┐     ┌────────────┐
